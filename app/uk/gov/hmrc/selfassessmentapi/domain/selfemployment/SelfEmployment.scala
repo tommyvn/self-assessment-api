@@ -23,6 +23,8 @@ import play.api.libs.json.Reads._
 import play.api.libs.json._
 import uk.gov.hmrc.selfassessmentapi.domain.ErrorCode.{apply => _, _}
 import uk.gov.hmrc.selfassessmentapi.domain._
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoSelfEmployment
+import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfEmploymentProfitCalculation._
 
 case class SelfEmployment(id: Option[SourceId] = None,
                           commencementDate: LocalDate,

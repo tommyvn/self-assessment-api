@@ -41,4 +41,16 @@ trait CalculationStep {
   protected def roundDown(n: BigDecimal): BigDecimal = n.setScale(0, RoundingMode.DOWN)
 }
 
-case class SelfAssessment(selfEmployments: Seq[MongoSelfEmployment] = Seq())
+case class SelfAssessment(selfEmployments: Seq[MongoSelfEmployment] = Nil) {
+  def calculateLiability(liability: MongoLiability): MongoLiability = {
+    SelfAssessment.calculationSteps.foldLeft(liability)((liability, step) => step.run(this, liability))
+  }
+}
+
+object SelfAssessment {
+  val calculationSteps = Seq(
+    SelfEmploymentProfitCalculation,
+    TotalIncomeCalculation,
+    PersonalAllowanceCalculation
+  )
+}

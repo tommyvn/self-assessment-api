@@ -28,11 +28,11 @@ import uk.gov.hmrc.selfassessmentapi.domain.{TaxYear, _}
 
 case class MongoUnearnedIncomesSavingsIncomeSummary(summaryId: SummaryId,
                                             `type`: SavingsIncomeType,
-                                            amount: BigDecimal) extends MongoSummary {
+                                            amount: BigDecimal) extends MongoSummary[SavingsIncome] {
 
   val arrayName = MongoUnearnedIncomesSavingsIncomeSummary.arrayName
 
-  def toSavingsIncome: SavingsIncome =
+  def toDomain: SavingsIncome =
     SavingsIncome(id = Some(summaryId),
       `type` = `type`,
       amount = amount)
@@ -50,8 +50,8 @@ object MongoUnearnedIncomesSavingsIncomeSummary {
 
   implicit val format = Json.format[MongoUnearnedIncomesSavingsIncomeSummary]
 
-  def toMongoSummary(income: SavingsIncome, id: Option[SummaryId] = None): MongoUnearnedIncomesSavingsIncomeSummary = {
-    MongoUnearnedIncomesSavingsIncomeSummary(
+  def toMongoSummary(income: SavingsIncome, id: Option[SummaryId] = None): MongoSummary[SavingsIncome] = {
+    new MongoUnearnedIncomesSavingsIncomeSummary(
       summaryId = id.getOrElse(BSONObjectID.generate.stringify),
       `type` = income.`type`,
       amount = income.amount
@@ -61,10 +61,10 @@ object MongoUnearnedIncomesSavingsIncomeSummary {
 
 case class MongoUnearnedIncomesDividendSummary(summaryId: SummaryId,
                                              `type`: DividendType,
-                                             amount: BigDecimal) extends MongoSummary {
+                                             amount: BigDecimal) extends MongoSummary[Dividend] {
   val arrayName = MongoUnearnedIncomesDividendSummary.arrayName
 
-  def toDividend: Dividend =
+  def toDomain: Dividend =
     Dividend(id = Some(summaryId),
       `type` = `type`,
       amount = amount)

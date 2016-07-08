@@ -14,15 +14,8 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.selfassessmentapi.repositories.domain
+package uk.gov.hmrc.selfassessmentapi.domain
 
-import reactivemongo.bson.BSONDocument
-import uk.gov.hmrc.selfassessmentapi.domain._
-
-trait MongoSummary[T] {
-  def toBsonDocument: BSONDocument
-  val summaryId: SummaryId
-  val arrayName: String
-  val amount: BigDecimal
-  def toDomain: T
+object Sum {
+  def apply(values: Option[BigDecimal]*) = values.flatten.sum
 }

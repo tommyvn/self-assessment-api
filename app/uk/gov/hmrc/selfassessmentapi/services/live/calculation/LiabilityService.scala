@@ -35,13 +35,10 @@ class LiabilityService(selfEmploymentRepository: SelfEmploymentMongoRepository, 
     for {
       emptyLiability <- liabilityRepository.save(MongoLiability.create(saUtr, taxYear))
       selfEmployments <- selfEmploymentRepository.findAll(saUtr, taxYear)
-      liability <- liabilityRepository.save(calculateLiability(emptyLiability, selfEmployments))
+      liability <- liabilityRepository.save(SelfAssessment(selfEmployments).calculateLiability(emptyLiability))
     } yield liability.liabilityId
   }
 
-  private def calculateLiability(liability: MongoLiability, selfEmployments: Seq[MongoSelfEmployment]): MongoLiability = {
-    liabilityCalculator.calculate(SelfAssessment(selfEmployments = selfEmployments), liability)
-  }
 }
 
 object LiabilityService {

@@ -24,7 +24,7 @@ import uk.gov.hmrc.domain.SaUtr
 import uk.gov.hmrc.selfassessmentapi.MongoEmbeddedDatabase
 import uk.gov.hmrc.selfassessmentapi.domain.BaseDomain
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoSelfEmployment, MongoSelfEmploymentIncomeSummary}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoSelfEmployment, MongoSelfEmploymentIncomeSummary, SelfEmploymentIncomes}
 import uk.gov.hmrc.selfassessmentapi.repositories.{SourceRepository, SummaryRepository}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -214,14 +214,15 @@ class SelfEmploymentRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
     }
 
     "not remove incomes" in {
-      val source = MongoSelfEmployment.create(saUtr, taxYear, selfEmployment()).copy(incomes = Seq(MongoSelfEmploymentIncomeSummary(BSONObjectID.generate.stringify, IncomeType.Turnover, 10)))
+      val source = MongoSelfEmployment.create(saUtr, taxYear, selfEmployment()).copy(incomes =
+        SelfEmploymentIncomes(Seq(MongoSelfEmploymentIncomeSummary(BSONObjectID.generate.stringify, IncomeType.Turnover, 10))))
       await(mongoRepository.insert(source))
       val found = await(mongoRepository.findById(saUtr, taxYear, source.sourceId)).get
       await(selfEmploymentRepository.update(saUtr, taxYear, source.sourceId, found))
 
       val found1 = await(mongoRepository.findById(source.id))
 
-      found1.get.incomes should not be empty
+      found1.get.incomes.incomes should not be empty
     }
 
     "update last modified" in {

@@ -27,7 +27,9 @@ case class Adjustments(includedNonTaxableProfits: Option[BigDecimal] = None,
                        accountingAdjustment: Option[BigDecimal] = None,
                        averagingAdjustment: Option[BigDecimal] = None,
                        lossBroughtForward: Option[BigDecimal] = None,
-                       outstandingBusinessIncome: Option[BigDecimal] = None)
+                       outstandingBusinessIncome: Option[BigDecimal] = None) {
+  def total = Sum(basisAdjustment, accountingAdjustment, averagingAdjustment)
+}
 
 object Adjustments {
   implicit val writes = Json.writes[Adjustments]

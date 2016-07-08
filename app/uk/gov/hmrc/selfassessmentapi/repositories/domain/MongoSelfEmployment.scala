@@ -17,7 +17,7 @@
 package uk.gov.hmrc.selfassessmentapi.repositories.domain
 
 import org.joda.time.{DateTime, DateTimeZone, LocalDate}
-import play.api.libs.json.{Format, Json}
+import play.api.libs.json._
 import reactivemongo.bson.{BSONDocument, BSONDouble, BSONObjectID, BSONString}
 import uk.gov.hmrc.domain._
 import uk.gov.hmrc.mongo.json.ReactiveMongoFormats
@@ -26,14 +26,16 @@ import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.BalancingChargeType.B
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType.ExpenseType
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.IncomeType.IncomeType
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
-import uk.gov.hmrc.selfassessmentapi.domain.{SourceId, SummaryId, TaxYear, TaxYearProperties}
+import uk.gov.hmrc.selfassessmentapi.domain.{Income => _, _}
+
+import scala.collection.immutable.Nil
 
 case class MongoSelfEmploymentIncomeSummary(summaryId: SummaryId,
                                             `type`: IncomeType,
-                                            amount: BigDecimal) extends MongoSummary {
+                                            amount: BigDecimal) extends MongoSummary[Income] {
   val arrayName = MongoSelfEmploymentIncomeSummary.arrayName
 
-  def toIncome: Income =
+  def toDomain: Income =
     Income(id = Some(summaryId),
       `type` = `type`,
       amount = amount)
@@ -51,8 +53,8 @@ object MongoSelfEmploymentIncomeSummary {
 
   implicit val format = Json.format[MongoSelfEmploymentIncomeSummary]
 
-  def toMongoSummary(income: Income, id: Option[SummaryId] = None): MongoSelfEmploymentIncomeSummary = {
-    MongoSelfEmploymentIncomeSummary(
+  def toMongoSummary(income: Income, id: Option[SummaryId] = None) = {
+    new MongoSelfEmploymentIncomeSummary(
       summaryId = id.getOrElse(BSONObjectID.generate.stringify),
       `type` = income.`type`,
       amount = income.amount
@@ -62,10 +64,10 @@ object MongoSelfEmploymentIncomeSummary {
 
 case class MongoSelfEmploymentExpenseSummary(summaryId: SummaryId,
                                              `type`: ExpenseType,
-                                             amount: BigDecimal) extends MongoSummary {
+                                             amount: BigDecimal) extends MongoSummary[Expense] {
   val arrayName = MongoSelfEmploymentExpenseSummary.arrayName
 
-  def toExpense: Expense =
+  def toDomain: Expense =
     Expense(id = Some(summaryId),
       `type` = `type`,
       amount = amount)
@@ -84,7 +86,7 @@ object MongoSelfEmploymentExpenseSummary {
   implicit val format = Json.format[MongoSelfEmploymentExpenseSummary]
 
   def toMongoSummary(expense: Expense, id: Option[SummaryId] = None): MongoSelfEmploymentExpenseSummary = {
-    MongoSelfEmploymentExpenseSummary(
+    new MongoSelfEmploymentExpenseSummary(
       summaryId = id.getOrElse(BSONObjectID.generate.stringify),
       `type` = expense.`type`,
       amount = expense.amount
@@ -94,10 +96,10 @@ object MongoSelfEmploymentExpenseSummary {
 
 case class MongoSelfEmploymentBalancingChargeSummary(summaryId: SummaryId,
                                                      `type`: BalancingChargeType,
-                                                     amount: BigDecimal) extends MongoSummary {
+                                                     amount: BigDecimal) extends MongoSummary[BalancingCharge] {
   val arrayName = MongoSelfEmploymentBalancingChargeSummary.arrayName
 
-  def toBalancingCharge =
+  def toDomain =
     BalancingCharge(id = Some(summaryId),
       `type` = `type`,
       amount = amount)
@@ -116,7 +118,7 @@ object MongoSelfEmploymentBalancingChargeSummary {
   implicit val format = Json.format[MongoSelfEmploymentBalancingChargeSummary]
 
   def toMongoSummary(balancingCharge: BalancingCharge, id: Option[SummaryId] = None): MongoSelfEmploymentBalancingChargeSummary = {
-    MongoSelfEmploymentBalancingChargeSummary(
+    new MongoSelfEmploymentBalancingChargeSummary(
       summaryId = id.getOrElse(BSONObjectID.generate.stringify),
       `type` = balancingCharge.`type`,
       amount = balancingCharge.amount
@@ -124,11 +126,11 @@ object MongoSelfEmploymentBalancingChargeSummary {
   }
 }
 
-case class MongoSelfEmploymentGoodsAndServicesOwnUseSummary(summaryId: SummaryId, amount: BigDecimal) extends MongoSummary {
+case class MongoSelfEmploymentGoodsAndServicesOwnUseSummary(summaryId: SummaryId, amount: BigDecimal) extends MongoSummary[GoodsAndServicesOwnUse] {
 
   val arrayName = MongoSelfEmploymentGoodsAndServicesOwnUseSummary.arrayName
 
-  def toGoodsAndServicesOwnUse = GoodsAndServicesOwnUse(id = Some(summaryId), amount = amount)
+  def toDomain = GoodsAndServicesOwnUse(id = Some(summaryId), amount = amount)
 
   def toBsonDocument = BSONDocument(
     "summaryId" -> summaryId,
@@ -142,8 +144,9 @@ object MongoSelfEmploymentGoodsAndServicesOwnUseSummary {
 
   implicit val format = Json.format[MongoSelfEmploymentGoodsAndServicesOwnUseSummary]
 
-  def toMongoSummary(goodsAndServicesOwnUse: GoodsAndServicesOwnUse, id: Option[SummaryId] = None): MongoSelfEmploymentGoodsAndServicesOwnUseSummary = {
-    MongoSelfEmploymentGoodsAndServicesOwnUseSummary(
+  def toMongoSummary(goodsAndServicesOwnUse: GoodsAndServicesOwnUse, id: Option[SummaryId] = None):
+  MongoSelfEmploymentGoodsAndServicesOwnUseSummary = {
+    new MongoSelfEmploymentGoodsAndServicesOwnUseSummary(
       summaryId = id.getOrElse(BSONObjectID.generate.stringify),
       amount = goodsAndServicesOwnUse.amount
     )
@@ -174,6 +177,51 @@ object MongoTaxYearProperties {
   })
 }
 
+trait MongoSummaries[T] {
+  def summaries: Seq[MongoSummary[T]]
+  def toDomains = summaries.map(_.toDomain)
+  def exists(id: SummaryId): Boolean = summaries.exists(_.summaryId == id)
+  def findById(id: SummaryId) = summaries.find(_.summaryId == id).map(_.toDomain)
+  def total = Some(summaries.map(_.amount).sum)
+}
+
+case class SelfEmploymentIncomes(incomes: Seq[MongoSelfEmploymentIncomeSummary]) extends MongoSummaries[Income] {
+  override def summaries = incomes
+}
+
+object SelfEmploymentIncomes {
+  implicit val format = Json.format[SelfEmploymentIncomes]
+}
+
+case class SelfEmploymentBalancingCharges(balancingCharges: Seq[MongoSelfEmploymentBalancingChargeSummary]) extends MongoSummaries[BalancingCharge] {
+  override def summaries: Seq[MongoSummary[BalancingCharge]] = balancingCharges
+}
+
+object SelfEmploymentBalancingCharges {
+  implicit val format = Json.format[SelfEmploymentBalancingCharges]
+}
+
+case class SelfEmploymentExpenses(expenses: Seq[MongoSelfEmploymentExpenseSummary]) extends MongoSummaries[Expense] {
+  def totalAmountExceptType(expenseType: ExpenseType.Value) = {
+    expenses.filterNot(_.`type` == expenseType).map(_.amount).sum
+  }
+
+  override def summaries: Seq[MongoSummary[Expense]] = expenses
+}
+
+object SelfEmploymentExpenses {
+  implicit val format = Json.format[SelfEmploymentExpenses]
+}
+
+case class SelfEmploymentGoodAndServicesOwnUse(goodsAndServicesOwnUse: Seq[MongoSelfEmploymentGoodsAndServicesOwnUseSummary]) extends MongoSummaries[GoodsAndServicesOwnUse] {
+  override def summaries: Seq[MongoSummary[GoodsAndServicesOwnUse]] = goodsAndServicesOwnUse
+}
+
+object SelfEmploymentGoodAndServicesOwnUse {
+  implicit val format = Json.format[SelfEmploymentGoodAndServicesOwnUse]
+}
+
+
 case class MongoSelfEmployment(id: BSONObjectID,
                                sourceId: SourceId,
                                saUtr: SaUtr,
@@ -183,17 +231,22 @@ case class MongoSelfEmployment(id: BSONObjectID,
                                commencementDate: LocalDate,
                                allowances: Option[Allowances] = None,
                                adjustments: Option[Adjustments] = None,
-                               incomes: Seq[MongoSelfEmploymentIncomeSummary] = Nil,
-                               expenses: Seq[MongoSelfEmploymentExpenseSummary] = Nil,
-                               balancingCharges: Seq[MongoSelfEmploymentBalancingChargeSummary] = Nil,
-                               goodsAndServicesOwnUse: Seq[MongoSelfEmploymentGoodsAndServicesOwnUseSummary] = Nil) extends SourceMetadata {
+                               incomes: SelfEmploymentIncomes = SelfEmploymentIncomes(Nil),
+                               expenses: SelfEmploymentExpenses = SelfEmploymentExpenses(Nil),
+                               balancingCharges: SelfEmploymentBalancingCharges = SelfEmploymentBalancingCharges(Nil),
+                               goodsAndServicesOwnUse: SelfEmploymentGoodAndServicesOwnUse = SelfEmploymentGoodAndServicesOwnUse(Nil)) extends SourceMetadata {
 
   def toSelfEmployment = SelfEmployment(
     id = Some(sourceId),
     commencementDate = commencementDate,
     allowances = allowances,
     adjustments = adjustments)
+
+  def profitIncreases: BigDecimal = {
+    Sum(incomes.total, balancingCharges.total, goodsAndServicesOwnUse.total, adjustments.map(_.total))
+  }
 }
+
 
 object MongoSelfEmployment {
   implicit val dateTimeFormat = ReactiveMongoFormats.dateTimeFormats
@@ -221,3 +274,8 @@ object MongoSelfEmployment {
       adjustments = se.adjustments)
   }
 }
+
+
+
+
+
