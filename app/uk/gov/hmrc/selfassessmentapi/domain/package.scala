@@ -22,6 +22,8 @@ import uk.gov.hmrc.selfassessmentapi.domain.CountryCodes.{apply => _, _}
 import uk.gov.hmrc.selfassessmentapi.domain.ErrorCode._
 import uk.gov.hmrc.selfassessmentapi.domain.UkCountryCodes.{apply => _, _}
 
+import scala.math.BigDecimal.RoundingMode
+
 
 package object domain {
 
@@ -41,4 +43,30 @@ package object domain {
   def maxAmountValidator(fieldName: String, maxAmount: BigDecimal) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName cannot be greater than $maxAmount",
     MAX_MONETARY_AMOUNT))(_ <= maxAmount)
 
+}
+
+object Sum {
+  def apply(values: Option[BigDecimal]*) = values.flatten.sum
+}
+
+object CapAt {
+  def apply(n: Option[BigDecimal], cap: BigDecimal): Option[BigDecimal] = n map {
+    case x if x > cap => cap
+    case x => x
+  }
+}
+
+object PositiveOrZero {
+  def apply(n: BigDecimal): BigDecimal = n match {
+    case x if x > 0 => x
+    case _ => 0
+  }
+}
+
+object ValueOrZero {
+  def apply(maybeValue: Option[BigDecimal]): BigDecimal = maybeValue.getOrElse(0)
+}
+
+object RoundDown {
+  def apply(n: BigDecimal): BigDecimal = n.setScale(0, RoundingMode.DOWN)
 }

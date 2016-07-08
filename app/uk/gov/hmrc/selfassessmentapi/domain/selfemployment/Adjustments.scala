@@ -19,6 +19,7 @@ package uk.gov.hmrc.selfassessmentapi.domain.selfemployment
 import play.api.libs.functional.syntax._
 import play.api.libs.json.Reads._
 import play.api.libs.json._
+import uk.gov.hmrc.selfassessmentapi.Sum
 import uk.gov.hmrc.selfassessmentapi.domain._
 
 case class Adjustments(includedNonTaxableProfits: Option[BigDecimal] = None,
@@ -27,9 +28,7 @@ case class Adjustments(includedNonTaxableProfits: Option[BigDecimal] = None,
                        accountingAdjustment: Option[BigDecimal] = None,
                        averagingAdjustment: Option[BigDecimal] = None,
                        lossBroughtForward: Option[BigDecimal] = None,
-                       outstandingBusinessIncome: Option[BigDecimal] = None) {
-  def total = Sum(basisAdjustment, accountingAdjustment, averagingAdjustment)
-}
+                       outstandingBusinessIncome: Option[BigDecimal] = None)
 
 object Adjustments {
   implicit val writes = Json.writes[Adjustments]

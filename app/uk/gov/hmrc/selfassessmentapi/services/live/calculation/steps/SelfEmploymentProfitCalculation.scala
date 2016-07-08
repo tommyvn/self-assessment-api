@@ -16,40 +16,22 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
 
-import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType.Depreciation
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, MongoSelfEmployment, SelfEmploymentIncome}
+import uk.gov.hmrc.selfassessmentapi.RoundDown
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, SelfEmploymentIncome}
 
 object SelfEmploymentProfitCalculation extends CalculationStep {
-
-  private val annualInvestmentAllowance = 200000
-
   override def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability = {
 
     val profitFromSelfEmployments = {
-      val employments = selfAssessment.selfEmployments
-      employments.map { selfEmployment =>
-        val adjustedProfit = positiveOrZero(selfEmployment.profitIncreases - profitReductions(selfEmployment))
-        val lossBroughtForward = valueOrZero(capAt(selfEmployment.adjustments.flatMap(_.lossBroughtForward), adjustedProfit))
-        val outstandingBusinessIncome = valueOrZero(selfEmployment.adjustments.flatMap(_.outstandingBusinessIncome))
-        val taxableProfit = adjustedProfit - lossBroughtForward + outstandingBusinessIncome
-        val profit = roundDown(taxableProfit + lossBroughtForward)
+      selfAssessment.selfEmployments.map { selfEmployment =>
+        val taxableProfit = selfEmployment.adjustedProfit - selfEmployment.lossBroughtForward + selfEmployment.outstandingBusinessIncome
+        val profit = RoundDown(taxableProfit + selfEmployment.lossBroughtForward)
 
-        SelfEmploymentIncome(sourceId = selfEmployment.sourceId, taxableProfit = roundDown(taxableProfit), profit = profit)
+        SelfEmploymentIncome(selfEmployment.sourceId, RoundDown(taxableProfit), profit)
       }
     }
 
     liability.copy(profitFromSelfEmployments = profitFromSelfEmployments)
   }
 
-  private def profitReductions(selfEmployment: MongoSelfEmployment): BigDecimal = {
-    val expenses = Some(selfEmployment.expenses.totalAmountExceptType(Depreciation))
-    val allowances = selfEmployment.allowances.map { a =>
-      sum(capAt(a.annualInvestmentAllowance, annualInvestmentAllowance), a.capitalAllowanceMainPool, a.capitalAllowanceSpecialRatePool, a.restrictedCapitalAllowance, a.businessPremisesRenovationAllowance, a.enhancedCapitalAllowance, a.allowancesOnSales)
-    }
-    val adjustments = selfEmployment.adjustments.map { a =>
-      sum(a.includedNonTaxableProfits, a.overlapReliefUsed)
-    }
-
-    sum(expenses, allowances, adjustments)
-  }
 }
