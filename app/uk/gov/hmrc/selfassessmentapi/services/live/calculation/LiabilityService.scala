@@ -25,7 +25,7 @@ import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-class LiabilityService(selfEmploymentRepository: SelfEmploymentMongoRepository, liabilityRepository: LiabilityMongoRepository, liabilityCalculator: LiabilityCalculator) {
+class LiabilityService(selfEmploymentRepository: SelfEmploymentMongoRepository, liabilityRepository: LiabilityMongoRepository) {
 
   def find(saUtr: SaUtr, taxYear: TaxYear): Future[Option[Liability]] = {
     liabilityRepository.findBy(saUtr, taxYear).map(_.map(_.toLiability))
@@ -43,7 +43,7 @@ class LiabilityService(selfEmploymentRepository: SelfEmploymentMongoRepository, 
 
 object LiabilityService {
 
-  private lazy val service = new LiabilityService(SelfEmploymentRepository(), LiabilityRepository(), LiabilityCalculator())
+  private lazy val service = new LiabilityService(SelfEmploymentRepository(), LiabilityRepository())
 
   def apply() = service
 }

@@ -16,6 +16,7 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
 
+import uk.gov.hmrc.selfassessmentapi.PositiveOrZero
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
 
 object PersonalAllowanceCalculation extends CalculationStep {
@@ -30,7 +31,7 @@ object PersonalAllowanceCalculation extends CalculationStep {
       income - income % 2
     } map {
       case income if income <= taperingThreshold => standardAllowance
-      case income if income > taperingThreshold => positiveOrZero(standardAllowance - ((income - taperingThreshold) / 2))
+      case income if income > taperingThreshold => PositiveOrZero(standardAllowance - ((income - taperingThreshold) / 2))
     }
 
     liability.copy(personalAllowance = personalAllowance)

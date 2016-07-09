@@ -33,7 +33,7 @@ class LiabilityServiceSpec extends MongoEmbeddedDatabase with BeforeAndAfterEach
   private val liabilityRepo = new LiabilityMongoRepository()
   private val selfEmploymentRepo = new SelfEmploymentMongoRepository()
   private val liabilityCalculator = mock[LiabilityCalculator]
-  private val service = new LiabilityService(selfEmploymentRepo, liabilityRepo, liabilityCalculator)
+  private val service = new LiabilityService(selfEmploymentRepo, liabilityRepo)
 
   "find" should {
 
