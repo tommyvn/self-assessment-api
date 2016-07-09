@@ -22,8 +22,6 @@ import uk.gov.hmrc.selfassessmentapi.domain.CountryCodes.{apply => _, _}
 import uk.gov.hmrc.selfassessmentapi.domain.ErrorCode._
 import uk.gov.hmrc.selfassessmentapi.domain.UkCountryCodes.{apply => _, _}
 
-import scala.math.BigDecimal.RoundingMode
-
 
 package object domain {
 
@@ -68,5 +66,9 @@ object ValueOrZero {
 }
 
 object RoundDown {
-  def apply(n: BigDecimal): BigDecimal = n.setScale(0, RoundingMode.DOWN)
+  def apply(n: BigDecimal): BigDecimal = n.setScale(0, BigDecimal.RoundingMode.DOWN)
+}
+
+object RoundUp {
+  def apply(n: BigDecimal): BigDecimal = n.setScale(0, BigDecimal.RoundingMode.UP)
 }

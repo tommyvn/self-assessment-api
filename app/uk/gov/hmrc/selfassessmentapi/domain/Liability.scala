@@ -42,7 +42,14 @@ object IncomeFromSources {
   implicit val format = Json.format[IncomeFromSources]
 }
 
-case class IncomeSummary(incomes: IncomeFromSources, totalIncomeReceived: BigDecimal, personalAllowance: BigDecimal, totalTaxableIncome: BigDecimal)
+
+case class InterestFromUKBanksAndBuildingSocieties(sourceId: String, unTaxedInterest: BigDecimal)
+
+object InterestFromUKBanksAndBuildingSocieties {
+  implicit val format = Json.format[InterestFromUKBanksAndBuildingSocieties]
+}
+
+case class IncomeSummary(incomes: IncomeFromSources, totalIncomeReceived: BigDecimal, personalAllowance: BigDecimal, totalTaxableIncome: BigDecimal, totalIncomeOnWhichTaxIsDue: BigDecimal)
 
 object IncomeSummary {
   implicit val format = Json.format[IncomeSummary]
@@ -54,7 +61,7 @@ object CalculatedAmount {
   implicit val format = Json.format[CalculatedAmount]
 }
 
-case class Liability(id: Option[LiabilityId] = None, income: IncomeSummary, incomeTax: CalculatedAmount, credits: Seq[Amount], class4Nic: CalculatedAmount, totalTaxDue: BigDecimal)
+case class Liability(id: Option[LiabilityId] = None, income: IncomeSummary, incomeTax: CalculatedAmount, credits: Seq[Amount], class4Nic: CalculatedAmount, totalTaxDue: BigDecimal, totalAllowancesAndReliefs: BigDecimal)
 
 object Liability {
   implicit val format = Json.format[Liability]
@@ -74,7 +81,8 @@ object Liability {
         ),
         totalIncomeReceived = BigDecimal(93039),
         personalAllowance = BigDecimal(9440),
-        totalTaxableIncome = BigDecimal(83599)
+        totalTaxableIncome = BigDecimal(83599),
+        totalIncomeOnWhichTaxIsDue = BigDecimal(80000)
       ),
       incomeTax = CalculatedAmount(
         calculations = Seq(
@@ -99,6 +107,7 @@ object Liability {
         ),
         total = BigDecimal(3853.15)
       ),
-      totalTaxDue = BigDecimal(25796.95)
+      totalTaxDue = BigDecimal(25796.95),
+      totalAllowancesAndReliefs = BigDecimal(10000.00)
     )
 }

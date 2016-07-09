@@ -29,9 +29,11 @@ case class SelfAssessment(selfEmployments: Seq[MongoSelfEmployment] = Nil) {
 }
 
 object SelfAssessment {
-  val calculationSteps = Seq(
+  private val calculationSteps = Seq(
     SelfEmploymentProfitCalculation,
     TotalIncomeCalculation,
-    PersonalAllowanceCalculation
+    PersonalAllowanceCalculation,
+    TotalAllowancesAndReliefs,
+    TotalIncomeOnWhichTaxIsDueCalculation
   )
 }

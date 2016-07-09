@@ -29,11 +29,14 @@ case class MongoLiability(id: BSONObjectID,
                           taxYear: TaxYear,
                           createdDateTime: DateTime,
                           profitFromSelfEmployments: Seq[SelfEmploymentIncome] = Nil,
+                          interestFromUKBanksAndBuildingSocieties: Seq[InterestFromUKBanksAndBuildingSocieties] = Nil,
                           totalIncomeReceived: Option[BigDecimal] = None,
                           totalTaxableIncome: Option[BigDecimal] = None,
                           personalAllowance: Option[BigDecimal] = None,
                           totalAllowancesAndReliefs: Option[BigDecimal] = None,
                           totalIncomeOnWhichTaxIsDue: Option[BigDecimal] = None) {
+
+  def lossBroughtForward = profitFromSelfEmployments.map(_.lossBroughtForward).sum
 
   def toLiability =
     Liability(
@@ -42,16 +45,18 @@ case class MongoLiability(id: BSONObjectID,
         incomes = IncomeFromSources(selfEmployment = profitFromSelfEmployments.map(_.toIncome), employment = Nil),
         totalIncomeReceived = totalIncomeReceived.getOrElse(0),
         personalAllowance = personalAllowance.getOrElse(0),
-        totalTaxableIncome = totalTaxableIncome.getOrElse(0)
+        totalTaxableIncome = totalTaxableIncome.getOrElse(0),
+        totalIncomeOnWhichTaxIsDue = totalIncomeOnWhichTaxIsDue.getOrElse(0)
       ),
       incomeTax = CalculatedAmount(calculations = Nil, total = 0),
       credits = Nil,
       class4Nic = CalculatedAmount(calculations = Nil, total = 0),
-      totalTaxDue = 0
+      totalTaxDue = 0,
+      totalAllowancesAndReliefs = 0
     )
 }
 
-case class SelfEmploymentIncome(sourceId: SourceId, taxableProfit: BigDecimal, profit: BigDecimal) {
+case class SelfEmploymentIncome(sourceId: SourceId, taxableProfit: BigDecimal, profit: BigDecimal, lossBroughtForward: BigDecimal) {
 
   def toIncome = Income(sourceId, taxableProfit, profit)
 }
