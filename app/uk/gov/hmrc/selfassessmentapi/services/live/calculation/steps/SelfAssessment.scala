@@ -16,10 +16,20 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
 
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, MongoSelfEmployment}
 
-trait CalculationStep {
-  def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability
+case class SelfAssessment(selfEmployments: Seq[MongoSelfEmployment] = Nil) {
+  def calculateLiability(liability: MongoLiability): MongoLiability = {
+    SelfAssessment.calculationSteps.foldLeft(liability)((liability, step) => step.run(this, liability))
+  }
 }
 
-
+object SelfAssessment {
+  private val calculationSteps = Seq(
+    SelfEmploymentProfitCalculation,
+    TotalIncomeCalculation,
+    PersonalAllowanceCalculation,
+    TotalAllowancesAndReliefs,
+    TotalIncomeOnWhichTaxIsDueCalculation
+  )
+}
