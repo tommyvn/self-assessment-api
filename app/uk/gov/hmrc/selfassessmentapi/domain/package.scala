@@ -21,6 +21,7 @@ import play.api.libs.json._
 import uk.gov.hmrc.selfassessmentapi.domain.CountryCodes.{apply => _, _}
 import uk.gov.hmrc.selfassessmentapi.domain.ErrorCode._
 import uk.gov.hmrc.selfassessmentapi.domain.UkCountryCodes.{apply => _, _}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoSummary
 
 
 package object domain {
@@ -30,15 +31,51 @@ package object domain {
   type LiabilityId = String
   type ValidationErrors = Seq[(JsPath, Seq[ValidationError])]
 
-  def lengthValidator = Reads.of[String].filter(ValidationError("field length exceeded the max 100 chars", MAX_FIELD_LENGTH_EXCEEDED))(_.length <= 100)
+  def lengthValidator = Reads.of[String].filter(ValidationError("field length exceeded the max 100 chars", MAX_FIELD_LENGTH_EXCEEDED))(_
+    .length <= 100)
 
-  def positiveAmountValidator(fieldName: String) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName should be non-negative number up to 2 decimal values",
+  def positiveAmountValidator(fieldName: String) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName should be non-negative number" +
+    s" up to 2 decimal values",
     INVALID_MONETARY_AMOUNT))(x => x >= 0 && x.scale < 3)
 
-  def amountValidator(fieldName: String) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName should be a number up to 2 decimal values",
+  def amountValidator(fieldName: String) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName should be a number up to 2 decimal " +
+    s"values",
     INVALID_MONETARY_AMOUNT))(x => x.scale < 3)
 
-  def maxAmountValidator(fieldName: String, maxAmount: BigDecimal) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName cannot be greater than $maxAmount",
+  def maxAmountValidator(fieldName: String, maxAmount: BigDecimal) = Reads.of[BigDecimal].filter(ValidationError(s"$fieldName cannot be " +
+    s"greater than $maxAmount",
     MAX_MONETARY_AMOUNT))(_ <= maxAmount)
 
+}
+
+object Sum {
+  def apply(values: Option[BigDecimal]*) = values.flatten.sum
+
+  def apply(values: Seq[MongoSummary]) = values.map(_.amount).sum
+}
+
+object CapAt {
+  def apply(n: Option[BigDecimal], cap: BigDecimal): Option[BigDecimal] = n map {
+    case x if x > cap => cap
+    case x => x
+  }
+}
+
+object PositiveOrZero {
+  def apply(n: BigDecimal): BigDecimal = n match {
+    case x if x > 0 => x
+    case _ => 0
+  }
+}
+
+object ValueOrZero {
+  def apply(maybeValue: Option[BigDecimal]): BigDecimal = maybeValue.getOrElse(0)
+}
+
+object RoundDown {
+  def apply(n: BigDecimal): BigDecimal = n.setScale(0, BigDecimal.RoundingMode.DOWN)
+}
+
+object RoundUp {
+  def apply(n: BigDecimal): BigDecimal = n.setScale(0, BigDecimal.RoundingMode.UP)
 }

@@ -21,6 +21,7 @@ import play.api.libs.json.{Format, Json}
 import reactivemongo.bson.{BSONDocument, BSONDouble, BSONObjectID, BSONString}
 import uk.gov.hmrc.domain._
 import uk.gov.hmrc.mongo.json.ReactiveMongoFormats
+import uk.gov.hmrc.selfassessmentapi.{CapAt, PositiveOrZero, Sum, ValueOrZero}
 import uk.gov.hmrc.selfassessmentapi.domain.pensioncontribution.PensionContribution
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.BalancingChargeType.BalancingChargeType
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType.ExpenseType
@@ -193,6 +194,8 @@ case class MongoSelfEmployment(id: BSONObjectID,
     commencementDate = commencementDate,
     allowances = allowances,
     adjustments = adjustments)
+
+  lazy val outstandingBusinessIncome = ValueOrZero(adjustments.flatMap(_.outstandingBusinessIncome))
 }
 
 object MongoSelfEmployment {

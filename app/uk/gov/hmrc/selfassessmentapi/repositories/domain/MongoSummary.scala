@@ -23,4 +23,5 @@ trait MongoSummary {
   def toBsonDocument: BSONDocument
   val summaryId: SummaryId
   val arrayName: String
+  val amount: BigDecimal
 }
