@@ -50,7 +50,9 @@ package object domain {
 
 object Sum {
   def apply(values: Option[BigDecimal]*) = values.flatten.sum
+}
 
+object Total {
   def apply(values: Seq[MongoSummary]) = values.map(_.amount).sum
 }
 
