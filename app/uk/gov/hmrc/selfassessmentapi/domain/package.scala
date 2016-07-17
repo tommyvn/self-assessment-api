@@ -61,6 +61,8 @@ object CapAt {
     case x if x > cap => cap
     case x => x
   }
+
+  def apply(n: BigDecimal, cap: BigDecimal): BigDecimal = apply(Some(n), cap).get
 }
 
 object PositiveOrZero {

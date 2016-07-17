@@ -16,9 +16,12 @@
 
 package uk.gov.hmrc.selfassessmentapi.repositories.domain.functional
 
-import uk.gov.hmrc.selfassessmentapi.domain.Deductions
+import org.scalacheck.Gen
+import org.scalatest.prop.TableDrivenPropertyChecks
+import org.scalatest.prop.Tables.Table
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand}
 import uk.gov.hmrc.selfassessmentapi.repositories.domain._
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
@@ -110,7 +113,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
     }
 
-    /*"be rounded down to the nearest pound" in {
+    "be rounded down to the nearest pound" in {
 
       val selfEmployment =
         aSelfEmployment(selfEmploymentId).copy(
@@ -122,8 +125,8 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1298)
-    }*/
+      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1)
+    }
 
     "subtract adjustments from profit" in {
 
@@ -352,37 +355,19 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
   "total income" should {
     "calculate total income" in {
-
-      val selfEmploymentOne = aSelfEmployment(selfEmploymentId).copy(incomes = Seq(income(IncomeType.Turnover, 200)))
-
-      TotalIncomeReceived(SelfAssessment(selfEmployments = Seq(selfEmploymentOne)),
-        Seq(domain.InterestFromUKBanksAndBuildingSocieties("ue1", 100),
-        domain.InterestFromUKBanksAndBuildingSocieties("ue2", 150)
-      ), Seq(domain.DividendsFromUKSources("dividend1", 1000),
-        domain.DividendsFromUKSources("dividend2", 2000)
-      )) shouldBe 3450
+      TotalIncomeReceived(200, 250, 3000) shouldBe 3450
     }
 
     "calculate total income if there is no income from self employments" in {
-      TotalIncomeReceived(SelfAssessment(selfEmployments = Seq()),Seq(), Seq()) shouldBe 0
+      TotalIncomeReceived(0,0,0) shouldBe 0
     }
 
     "calculate total income if there is no income from self employments but has interest from UK banks and building societies" in {
-
-      TotalIncomeReceived(SelfAssessment(selfEmployments = Seq()),
-        Seq(domain.InterestFromUKBanksAndBuildingSocieties("ue1", 100),
-          domain.InterestFromUKBanksAndBuildingSocieties("ue2", 150)
-        ), Seq()) shouldBe 250
+      TotalIncomeReceived(0, 250, 0) shouldBe 250
     }
 
-
     "calculate total income if there is no income from self employments but has dividends from unearned income" in {
-
-      TotalIncomeReceived(SelfAssessment(selfEmployments = Seq()),
-        Seq(), Seq(domain.DividendsFromUKSources("dividend1", 1000),
-          domain.DividendsFromUKSources("dividend2", 2000)
-        )) shouldBe 3000
-
+      TotalIncomeReceived(0, 0, 3000) shouldBe 3000
     }
   }
 
@@ -419,6 +404,185 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
     "zero if totalIncomeReceived is less than totalDeductions" in {
       TotalIncomeOnWhichTaxIsDue(50, 100) shouldBe 0
+    }
+
+  }
+
+  "PersonalSavingsAllowance" should {
+     def generate(lowerLimit: Int, upperLimit: Int) = for { value <- Gen.chooseNum(lowerLimit, upperLimit) } yield value
+
+    "be zero when the total income on which tax is due is zero" in {
+      PersonalSavingsAllowance(0) shouldBe 0
+    }
+
+    "be 1000 when the total income on which tax is due is less than equal to 32000 " in {
+      PersonalSavingsAllowance(1) shouldBe 1000
+      generate(1, 32000) map { randomNumber => PersonalSavingsAllowance(randomNumber) shouldBe 1000 }
+      PersonalSavingsAllowance(32000) shouldBe 1000
+    }
+
+    "be 500 when the total income on which tax is due is greater than 32000 but less than equal to 150000" in {
+      PersonalSavingsAllowance(32001) shouldBe 500
+      generate(32001, 150000) map { randomNumber => PersonalSavingsAllowance(randomNumber) shouldBe 500 }
+      PersonalSavingsAllowance(150000) shouldBe 500
+    }
+
+    "be 0 when the total income on which tax is due is greater than 150000" in {
+      PersonalSavingsAllowance(150001) shouldBe 0
+      generate(150001, Int.MaxValue) map { randomNumber => PersonalSavingsAllowance(randomNumber) shouldBe 0 }
+    }
+
+  }
+
+  "SavingsStartingRate" should {
+
+    "be 5000 if payPensionProfitsReceived is less than deductions" in {
+      SavingsStartingRate(5000, 6000) shouldBe 5000
+    }
+
+    "be 5000 if payPensionProfitsReceived is equal to deductions" in {
+      SavingsStartingRate(6000, 6000) shouldBe 5000
+    }
+
+    "be the startingRateLimit - positiveOfZero(totalProfit - totalDeductions)" in {
+      SavingsStartingRate(9000, 6000) shouldBe 2000
+    }
+
+    "return 0 if payPensionProfitsReceived is equal to deductions + startingRateLimit" in {
+      SavingsStartingRate(11000, 6000) shouldBe 0
+    }
+
+    "return 0 if payPensionProfitsReceived is more than deductions + startingRateLimit" in {
+      SavingsStartingRate(12000, 6000) shouldBe 0
+    }
+  }
+
+  "run with no deductions" should {
+
+    "calculate tax for total pay pension and profit received lesser than 32000" in {
+      PayPensionProfitsTax(31999, 0) should contain theSameElementsAs Seq(TaxBandAllocation(31999, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received equal to 32000" in {
+      PayPensionProfitsTax(32000, 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received greater than 32000 but lesser than 150000" in {
+      PayPensionProfitsTax(60000, 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(28000, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+
+    }
+
+    "calculate tax for total pay pension and profit received equal to 150000" in {
+      PayPensionProfitsTax(150000, 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(118000, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+
+    }
+
+    "calculate tax for total pay pension and profit received  greater than 150000" in {
+      PayPensionProfitsTax(300000, 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(118000, HigherTaxBand),
+        TaxBandAllocation(150000, AdditionalHigherTaxBand))
+    }
+  }
+
+  "run with deductions" should {
+
+    "calculate tax for total pay pension and profit received lesser than 32000" in {
+      PayPensionProfitsTax(33999, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(31999, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received equal to 32000" in {
+      PayPensionProfitsTax(34000, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received greater than 32000 but lesser than 150000" in {
+      PayPensionProfitsTax(62000, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(28000, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received equal to 150000" in {
+      PayPensionProfitsTax(152000, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(118000, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received  greater than 150000" in {
+      PayPensionProfitsTax(302000, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
+        TaxBandAllocation(118000, HigherTaxBand),
+        TaxBandAllocation(150000, AdditionalHigherTaxBand))
+    }
+
+    "calculate tax for total pay pension and profit received lesser than deductions" in {
+      PayPensionProfitsTax(1500, 2000) should contain theSameElementsAs Seq(TaxBandAllocation(0, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+  }
+
+  "run" should {
+
+    "calculate personal dividend allowance when there is no input data" in {
+      PersonalDividendAllowance(0, 0,0, 0,0) shouldBe 0
+    }
+
+    "calculate personal dividend allowance capped for various data driven inputs" in {
+      val incomeTaxRelief = BigDecimal(2000)
+      val personalAllowance = BigDecimal(11000)
+      val inputs = Table(
+        ("ProfitFromSelfEmployment", "InterestReceived", "DividendIncome", "PersonalDividendAllowance"),
+        ("8000", "0", "2000", "0"),
+        ("8000", "0", "6000", "1000"),
+        ("11000", "2000", "5000", "5000"),
+        ("11000", "5000", "5000", "5000"),
+        ("13000", "2000", "7000", "5000"),
+        ("15000", "3000", "9000", "5000"),
+        ("13000", "0", "2000", "2000"),
+        ("11000", "0", "2000", "0"),
+        ("13000", "0", "5000", "5000"),
+        ("14000", "0", "6000", "5000"),
+        ("16000", "3000", "8000", "5000")
+      )
+
+      TableDrivenPropertyChecks.forAll(inputs) { (profitFromSelfEmployment: String, interestReceived: String, dividendIncome: String, personalDividendAllowance: String) =>
+        PersonalDividendAllowance(profitFromSelfEmployment.toInt, incomeTaxRelief, personalAllowance, interestReceived.toInt, dividendIncome.toInt) shouldBe personalDividendAllowance.toInt
+      }
+    }
+
+    "calculate personal dividend allowance when Profit from Self Employments is less than the (Personal Allowance + Income Tax Relief) and there isn't any Savings Income" in {
+      PersonalDividendAllowance(8000, 4000, 5000, 0, 2000) shouldBe 1000
+    }
+
+    "calculate personal dividend allowance when  Profit from Self Employments is less than the (Personal Allowance + Income Tax Relief) and there is a Savings Income (Interest), " +
+      "but Sum of Profit from Self Employments and Savings Income is less than the (Personal Allowance + Income Tax Relief)" in {
+      PersonalDividendAllowance(8000, 4000, 5000, 500, 2000) shouldBe 1500
+    }
+
+
+    "calculate personal dividend allowance when the Profit from Self Employments is less than the (Personal Allowance + Income Tax Relief) and there is a Savings Income (Interest), " +
+      "but Sum of Profit from Self Employments and Savings Income is greater or equal to the (Personal Allowance + Income Tax Relief)" in {
+      PersonalDividendAllowance(8000, 4000, 5000, 1000, 2000) shouldBe 2000
+    }
+
+
+    "calculate personal dividend allowance when the  Profit from Self Employments is greater or equal to the (Personal Allowance + Income Tax Relief) " in {
+      PersonalDividendAllowance(12000, 4000, 5000, 0, 2000) shouldBe 2000
+    }
+
+    "calculate personal dividend allowance capped at 5000 " in {
+      PersonalDividendAllowance(12000, 4000, 5000, 0, 6000) shouldBe 5000
     }
 
   }

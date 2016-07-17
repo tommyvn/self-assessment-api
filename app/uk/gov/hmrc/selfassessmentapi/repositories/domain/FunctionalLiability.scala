@@ -21,17 +21,86 @@ import uk.gov.hmrc.domain.SaUtr
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType
 import uk.gov.hmrc.selfassessmentapi.domain.{Deductions, _}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, TaxBandRangeCheck}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{CapAt, _}
+
+object PersonalDividendAllowance {
+  private def remainingPersonalAllowance(personalAllowance: BigDecimal, incomeTaxRelief: BigDecimal, totalProfitFromSelfEmployments: BigDecimal) = {
+    personalAllowance + incomeTaxRelief - totalProfitFromSelfEmployments
+  }
+
+  private def taxableDividendIncome(totalDividends: BigDecimal, personalAllowance: BigDecimal, incomeTaxRelief: BigDecimal, totalProfitFromSelfEmployments: BigDecimal) = {
+    totalDividends - remainingPersonalAllowance(personalAllowance, incomeTaxRelief, totalProfitFromSelfEmployments)
+  }
+
+  def apply(implicit selfAssessment: SelfAssessment): BigDecimal = apply(TotalProfitFromSelfEmployments(selfAssessment), IncomeTaxRelief(selfAssessment),
+    PersonalAllowance(selfAssessment), TotalSavings(selfAssessment), TotalDividends(selfAssessment))
+
+  def apply(totalProfitFromSelfEmployments: BigDecimal, incomeTaxRelief: BigDecimal, personalAllowance: BigDecimal,
+            totalSavings: BigDecimal, totalDividends: BigDecimal): BigDecimal = {
+    val taxableDividend =  taxableDividendIncome(totalDividends, personalAllowance, incomeTaxRelief, totalProfitFromSelfEmployments)
+    CapAt(totalProfitFromSelfEmployments match {
+      case profit if profit < (personalAllowance + incomeTaxRelief) =>
+        totalSavings match {
+          case saving if saving == 0 => PositiveOrZero(taxableDividend)
+          case saving if (profit + saving) < (personalAllowance + incomeTaxRelief) => PositiveOrZero(taxableDividend + saving)
+          case _ => totalDividends
+        }
+      case _ => totalDividends
+    }, 5000)
+  }
+
+}
+object PayPensionProfitsTax {
+  private def allocateToTaxBands(income: BigDecimal, taxBands: Seq[TaxBand]): Seq[TaxBandAllocation] = taxBands match {
+    case taxBand :: nextBands =>
+      Seq(TaxBandAllocation(taxBand.allocate(income), taxBand)) ++ allocateToTaxBands(income - taxBand.allocate(income), nextBands)
+    case Nil => Nil
+  }
+
+  def apply(selfAssessment: SelfAssessment): Seq[TaxBandAllocation] = {
+    apply(TotalProfitFromSelfEmployments(selfAssessment), TotalDeduction(selfAssessment))
+  }
+
+  def apply(totalProfitFromSelfEmployments: BigDecimal, totalDeduction: BigDecimal): Seq[TaxBandAllocation] = {
+    allocateToTaxBands(PositiveOrZero(totalProfitFromSelfEmployments - totalDeduction), Seq(BasicTaxBand, HigherTaxBand, AdditionalHigherTaxBand))
+  }
+
+}
+
+object TotalProfitFromSelfEmployments {
+  def apply(selfAssessment: SelfAssessment) = selfAssessment.selfEmployments.map(ProfitFromSelfEmployment(_)).sum
+}
+
+object SavingsStartingRate {
+  private val startingRateLimit = BigDecimal(5000)
+  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalProfitFromSelfEmployments(selfAssessment), TotalDeduction(selfAssessment))
+  def apply(profitFromSelfEmployments: BigDecimal, totalDeduction: BigDecimal): BigDecimal = PositiveOrZero(startingRateLimit - PositiveOrZero(profitFromSelfEmployments - totalDeduction))
+}
+
+object PersonalSavingsAllowance {
+  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalIncomeOnWhichTaxIsDue(selfAssessment))
+  def apply(totalIncomeOnWhichTaxIsDue: BigDecimal): BigDecimal = totalIncomeOnWhichTaxIsDue match {
+    case total if total < 1 => 0
+    case total if total isWithin BasicTaxBand => 1000
+    case total if total isWithin HigherTaxBand => 500
+    case _ => 0
+  }
+}
 
 object IncomeTaxRelief {
   def apply(selfAssessment: SelfAssessment) = RoundUp(selfAssessment.selfEmployments.map(LossBroughtForward(_)).sum)
 }
 
-object Deductions {
+object IncomeTaxReliefAndDeductions {
   def apply(selfAssessment: SelfAssessment) = {
     new Deductions(incomeTaxRelief = IncomeTaxRelief(selfAssessment), totalDeductions = TotalDeduction(selfAssessment))
   }
+}
+
+object TotalDividends {
+  def apply(selfAssessment: SelfAssessment) = DividendsFromUKSources(selfAssessment).map(_.totalDividend).sum
 }
 
 object DividendsFromUKSources {
@@ -40,10 +109,14 @@ object DividendsFromUKSources {
   }
 }
 
+object TotalSavings {
+  def apply(selfAssessment: SelfAssessment) = InterestFromUKBanksAndBuildingSocieties(selfAssessment).map(_.totalInterest).sum
+}
+
 object InterestFromUKBanksAndBuildingSocieties {
   def apply(selfAssessment: SelfAssessment): Seq[InterestFromUKBanksAndBuildingSocieties] =
     selfAssessment.unearnedIncomes.map { income =>
-      new InterestFromUKBanksAndBuildingSocieties(income.sourceId, RoundDown(income.savings.map {saving =>
+      new InterestFromUKBanksAndBuildingSocieties(income.sourceId, RoundDown(income.savings.map { saving =>
         saving.`type` match {
           case SavingsIncomeType.InterestFromBanksTaxed => saving.amount * 100 / 80
           case SavingsIncomeType.InterestFromBanksUntaxed => saving.amount
@@ -54,11 +127,13 @@ object InterestFromUKBanksAndBuildingSocieties {
 
 object TotalIncomeOnWhichTaxIsDue {
   def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalIncomeReceived(selfAssessment), TotalDeduction(selfAssessment))
+
   def apply(totalIncomeReceived: BigDecimal, totalDeduction: BigDecimal): BigDecimal = PositiveOrZero(totalIncomeReceived - totalDeduction)
 }
 
 object TotalDeduction {
   def apply(selfAssessment: SelfAssessment): BigDecimal = IncomeTaxRelief(selfAssessment) + PersonalAllowance(selfAssessment)
+
   def apply(incomeTaxRelief: BigDecimal, personalAllowance: BigDecimal): BigDecimal = incomeTaxRelief + personalAllowance
 }
 
@@ -76,21 +151,17 @@ object PersonalAllowance {
 }
 
 object TotalTaxableIncome {
-  def apply(selfAssessment: SelfAssessment) = selfAssessment.selfEmployments.map(selfEmployment => TaxableProfitFromSelfEmployment(selfEmployment)).sum
+  def apply(selfAssessment: SelfAssessment) = selfAssessment.selfEmployments.map(selfEmployment => TaxableProfitFromSelfEmployment
+  (selfEmployment)).sum
 }
 
 object TotalIncomeReceived {
   def apply(selfAssessment: SelfAssessment): BigDecimal = {
-    selfAssessment.selfEmployments.map(selfEmployment => ProfitFromSelfEmployment(selfEmployment)).sum +
-    InterestFromUKBanksAndBuildingSocieties(selfAssessment).map(_.totalInterest).sum +
-    DividendsFromUKSources(selfAssessment).map(_.totalDividend).sum
+    apply(TotalProfitFromSelfEmployments(selfAssessment), TotalSavings(selfAssessment), TotalDividends(selfAssessment))
   }
 
-  def apply(selfAssessment: SelfAssessment, interestFromUKBanksAndBuildingSocieties: Seq[InterestFromUKBanksAndBuildingSocieties],
-            dividendsFromUKSources: Seq[DividendsFromUKSources]): BigDecimal = {
-    selfAssessment.selfEmployments.map(selfEmployment => ProfitFromSelfEmployment(selfEmployment)).sum +
-      interestFromUKBanksAndBuildingSocieties.map(_.totalInterest).sum +
-      dividendsFromUKSources.map(_.totalDividend).sum
+  def apply(totalProfitFromSelfEmployments: BigDecimal, totalSavings: BigDecimal, totalDividends: BigDecimal): BigDecimal = {
+    totalProfitFromSelfEmployments + totalSavings + totalDividends
   }
 
 }
@@ -118,19 +189,23 @@ object AdjustedProfits {
 
 object TaxableProfitFromSelfEmployment {
   def apply(selfEmployment: MongoSelfEmployment) = {
-    AdjustedProfits(selfEmployment) - LossBroughtForward(selfEmployment) + selfEmployment.outstandingBusinessIncome
+    RoundDown(AdjustedProfits(selfEmployment) - LossBroughtForward(selfEmployment) + selfEmployment.outstandingBusinessIncome)
   }
 }
 
 object ProfitFromSelfEmployment {
-  def apply(selfEmployment: MongoSelfEmployment) : BigDecimal = apply(TaxableProfitFromSelfEmployment(selfEmployment), LossBroughtForward(selfEmployment))
-  def apply(taxableProfit: BigDecimal, lossBroughtForward: BigDecimal): BigDecimal = taxableProfit + lossBroughtForward
+  def apply(selfEmployment: MongoSelfEmployment): BigDecimal = apply(TaxableProfitFromSelfEmployment(selfEmployment), LossBroughtForward
+  (selfEmployment))
+
+  def apply(taxableProfit: BigDecimal, lossBroughtForward: BigDecimal): BigDecimal = RoundDown(taxableProfit + lossBroughtForward)
 }
 
 
 object LossBroughtForward {
   def apply(selfEmployment: MongoSelfEmployment): BigDecimal = apply(selfEmployment, AdjustedProfits(selfEmployment))
-  def apply(selfEmployment: MongoSelfEmployment, adjustedProfits: BigDecimal): BigDecimal = ValueOrZero(CapAt(selfEmployment.adjustments.flatMap(_.lossBroughtForward),
+
+  def apply(selfEmployment: MongoSelfEmployment, adjustedProfits: BigDecimal): BigDecimal = ValueOrZero(CapAt(selfEmployment.adjustments
+    .flatMap(_.lossBroughtForward),
     adjustedProfits))
 }
 
@@ -158,7 +233,7 @@ object FunctionalLiability {
       totalIncomeOnWhichTaxIsDue = TotalIncomeOnWhichTaxIsDue(selfAssessment),
       interestFromUKBanksAndBuildingSocieties = InterestFromUKBanksAndBuildingSocieties(selfAssessment),
       dividendsFromUKSources = DividendsFromUKSources(selfAssessment),
-      deductions = Deductions(selfAssessment))
+      deductions = IncomeTaxReliefAndDeductions(selfAssessment))
 
 }
 

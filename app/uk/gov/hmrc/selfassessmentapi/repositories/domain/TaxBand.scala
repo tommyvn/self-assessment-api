@@ -26,6 +26,7 @@ sealed trait TaxBand extends Math {
   def upperBound: Option[BigDecimal]
 
   def width = upperBound.map(_ - lowerBound + 1).getOrElse(BigDecimal(Long.MaxValue))
+  def allocate(income: BigDecimal) = if (income < width) income else width
 }
 
 object TaxBand {

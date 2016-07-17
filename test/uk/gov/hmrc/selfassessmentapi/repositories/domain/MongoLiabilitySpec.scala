@@ -18,7 +18,7 @@ package uk.gov.hmrc.selfassessmentapi.repositories.domain
 
 import uk.gov.hmrc.selfassessmentapi.domain._
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand}
-import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec}
+import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
 
 class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
@@ -32,11 +32,11 @@ class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           SelfEmploymentIncome(sourceId = "seId2", taxableProfit = 20, profit = 40, lossBroughtForward = 30)
         ),
         interestFromUKBanksAndBuildingSocieties = Seq(
-          InterestFromUKBanksAndBuildingSocieties(sourceId = "interestId1", totalInterest = 20),
-          InterestFromUKBanksAndBuildingSocieties(sourceId = "interestId2", totalInterest = 40)
+          domain.InterestFromUKBanksAndBuildingSocieties(sourceId = "interestId1", totalInterest = 20),
+          domain.InterestFromUKBanksAndBuildingSocieties(sourceId = "interestId2", totalInterest = 40)
         ),
         dividendsFromUKSources = Seq(
-          DividendsFromUKSources("divId1", totalDividend = 100)
+          domain.DividendsFromUKSources("divId1", totalDividend = 100)
         ),
         totalAllowancesAndReliefs = Some(20),
         totalIncomeReceived = Some(1000),
@@ -54,11 +54,11 @@ class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
               Income("seId2", taxableProfit = 20, profit = 40)
             ),
             interestFromUKBanksAndBuildingSocieties = Seq(
-              InterestFromUKBanksAndBuildingSocieties("interestId1", totalInterest = 20),
-              InterestFromUKBanksAndBuildingSocieties("interestId2", totalInterest = 40)
+              domain.InterestFromUKBanksAndBuildingSocieties("interestId1", totalInterest = 20),
+              domain.InterestFromUKBanksAndBuildingSocieties("interestId2", totalInterest = 40)
             ),
             dividendsFromUKSources = Seq(
-              DividendsFromUKSources("divId1", totalDividend = 100)
+              domain.DividendsFromUKSources("divId1", totalDividend = 100)
             ),
             employment = Nil
           ),
