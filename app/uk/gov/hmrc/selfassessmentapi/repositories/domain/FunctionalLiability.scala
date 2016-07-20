@@ -95,7 +95,8 @@ object IncomeTaxRelief {
 
 object IncomeTaxReliefAndDeductions {
   def apply(selfAssessment: SelfAssessment) = {
-    new Deductions(incomeTaxRelief = IncomeTaxRelief(selfAssessment), totalDeductions = TotalDeduction(selfAssessment))
+    new Deductions(incomeTaxRelief = IncomeTaxRelief(selfAssessment), totalDeductions = TotalDeduction(selfAssessment),
+      personalAllowance = PersonalAllowance(selfAssessment))
   }
 }
 
