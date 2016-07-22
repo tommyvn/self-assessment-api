@@ -21,8 +21,8 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.prop.Tables.Table
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand}
-import uk.gov.hmrc.selfassessmentapi.repositories.domain._
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, SavingsNilTaxBand, SavingsStartingTaxBand}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{TaxableSavingsIncome, _}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
 
@@ -222,23 +222,23 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
   "Personal Allowance" should {
     "be 11,000 if total taxable income is less than 100,000" in {
-      PersonalAllowance(totalTaxableIncome = 99999) shouldBe 11000
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 99999) shouldBe 11000
     }
 
     "be 11,000 if total taxable income is 100,001" in {
-      PersonalAllowance(totalTaxableIncome = 100001) shouldBe 11000
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 100001) shouldBe 11000
     }
 
     "be 11,000 - (TotalIncome - 100,000)/2 if total taxable income is greater than 100,000 but less than 122,000" in {
-      PersonalAllowance(totalTaxableIncome = 121999) shouldBe (11000 - (121999 - 100000)/2)
-      PersonalAllowance(totalTaxableIncome = 120000) shouldBe (11000 - (120000 - 100000)/2)
-      PersonalAllowance(totalTaxableIncome = 110000) shouldBe (11000 - (110000 - 100000)/2)
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 121999) shouldBe (11000 - (121999 - 100000)/2)
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 120000) shouldBe (11000 - (120000 - 100000)/2)
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 110000) shouldBe (11000 - (110000 - 100000)/2)
     }
 
     "be 0 if total taxable income is greater than equal to 122,000" in {
-      PersonalAllowance(totalTaxableIncome = 122000) shouldBe 0
-      PersonalAllowance(totalTaxableIncome = 122001) shouldBe 0
-      PersonalAllowance(totalTaxableIncome = 132000) shouldBe 0
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 122000) shouldBe 0
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 122001) shouldBe 0
+      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 132000) shouldBe 0
     }
   }
 
@@ -399,11 +399,11 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
   "Total incomes on which tax is due" should {
     "be totalIncomeReceived - totalDeduction" in {
-      TotalIncomeOnWhichTaxIsDue(100, 50) shouldBe 50
+      TotalTaxableIncome(100, 50) shouldBe 50
     }
 
     "zero if totalIncomeReceived is less than totalDeductions" in {
-      TotalIncomeOnWhichTaxIsDue(50, 100) shouldBe 0
+      TotalTaxableIncome(50, 100) shouldBe 0
     }
 
   }
@@ -437,23 +437,23 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
   "SavingsStartingRate" should {
 
     "be 5000 if payPensionProfitsReceived is less than deductions" in {
-      SavingsStartingRate(5000, 6000) shouldBe 5000
+      StartingSavingsRate(5000, 6000) shouldBe 5000
     }
 
     "be 5000 if payPensionProfitsReceived is equal to deductions" in {
-      SavingsStartingRate(6000, 6000) shouldBe 5000
+      StartingSavingsRate(6000, 6000) shouldBe 5000
     }
 
     "be the startingRateLimit - positiveOfZero(totalProfit - totalDeductions)" in {
-      SavingsStartingRate(9000, 6000) shouldBe 2000
+      StartingSavingsRate(9000, 6000) shouldBe 2000
     }
 
     "return 0 if payPensionProfitsReceived is equal to deductions + startingRateLimit" in {
-      SavingsStartingRate(11000, 6000) shouldBe 0
+      StartingSavingsRate(11000, 6000) shouldBe 0
     }
 
     "return 0 if payPensionProfitsReceived is more than deductions + startingRateLimit" in {
-      SavingsStartingRate(12000, 6000) shouldBe 0
+      StartingSavingsRate(12000, 6000) shouldBe 0
     }
   }
 
@@ -583,6 +583,90 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
     "calculate personal dividend allowance capped at 5000 " in {
       PersonalDividendAllowance(12000, 4000, 5000, 0, 6000) shouldBe 5000
+    }
+
+  }
+
+  "TaxableSavingsIncome" should {
+    "be equal to TotalSavingsIncomes - ((PersonalAllowance + IncomeTaxRelief) - ProfitsFromSelfEmployments) if ProfitsFromSelfEmployments < (PersonalAllowance + IncomeTaxRelief) " in {
+      TaxableSavingsIncome(totalSavingsIncome = 5000, totalDeduction = 4000, totalProfitFromSelfEmployments = 2000) shouldBe 3000
+      TaxableSavingsIncome(totalSavingsIncome = 5000, totalDeduction = 4000, totalProfitFromSelfEmployments = 3999) shouldBe 4999
+    }
+
+    "be equal to TotalSavingsIncomes if ProfitsFromSelfEmployments >= (PersonalAllowance + IncomeTaxRelief) " in {
+      TaxableSavingsIncome(totalSavingsIncome = 5000, totalDeduction = 4000, totalProfitFromSelfEmployments = 4000) shouldBe 5000
+      TaxableSavingsIncome(totalSavingsIncome = 5000, totalDeduction = 4000, totalProfitFromSelfEmployments = 4001) shouldBe 5000
+      TaxableSavingsIncome(totalSavingsIncome = 5000, totalDeduction = 4000, totalProfitFromSelfEmployments = 4500) shouldBe 5000
+    }
+  }
+
+  "SavingsIncomeTax" should {
+    /*"be 0 charged at SavingsStartingTaxBand(0%) if TaxableSavingIncome is less that StartingSavingRate" in {
+      SavingsIncomeTax(taxableSavingsIncome = 4999, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
+        TaxBandAllocation(0, SavingsStartingTaxBand),
+        TaxBandAllocation(0, SavingsNilTaxBand),
+        TaxBandAllocation(0, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "be 0 charged at SavingsStartingTaxBand(0%) if TaxableSavingIncome is equal to StartingSavingRate" in {
+      SavingsIncomeTax(taxableSavingsIncome = 5000, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
+        TaxBandAllocation(0, SavingsStartingTaxBand),
+        TaxBandAllocation(0, SavingsNilTaxBand),
+        TaxBandAllocation(0, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }
+
+    "be 0 charged at SavingsStartingTaxBand(0%) and 0 at SavingsNilTaxBand(0%) if TaxableSavingIncome is more than StartingSavingRate and " +
+      "TaxableSavingIncome - StartingSavingsRate is less than PersonalSavingsAllowance" in {
+      SavingsIncomeTax(taxableSavingsIncome = 5001, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
+        TaxBandAllocation(0, SavingsStartingTaxBand),
+        TaxBandAllocation(0, SavingsNilTaxBand),
+        TaxBandAllocation(0, BasicTaxBand),
+        TaxBandAllocation(0, HigherTaxBand),
+        TaxBandAllocation(0, AdditionalHigherTaxBand))
+    }*/
+
+    case class Print(value: BigDecimal) {
+      def as(name: String) = {
+        println(s"$name => $value")
+        value
+      }
+    }
+
+    "row 1" in {
+      val inputs = Table(
+        ("TotalProfitFromSelfEmployments", "TotalSavingsIncome", "StartingRateAmount", "NilRateAmount", "BasicRateTaxAmount", "HigherRateTaxAmount", "AdditionalHigherRateAmount"),
+        ("8000", "12000", "5000", "1000", "3000", "0", "0"),
+        ("5000", "6000", "0", "0", "0", "0", "0")
+      )
+
+      TableDrivenPropertyChecks.forAll(inputs) { (totalProfitFromSelfEmployments: String, totalSavingsIncome: String, startingRateAmount: String,
+                                                  nilRateAmount: String, basicRateTaxAmount: String, higherRateTaxAmount: String, additionalHigherRateAmount: String) =>
+
+        val personalAllowance = Print(PersonalAllowance(totalProfitFromSelfEmployments.toInt)).as("PersonalAllowance")
+        val totalDeduction = Print(TotalDeduction(incomeTaxRelief = 0, personalAllowance = personalAllowance)).as("TotalDeductions")
+        val savingStartingRate = Print(StartingSavingsRate(profitFromSelfEmployments = totalProfitFromSelfEmployments.toInt,
+          totalDeduction = totalDeduction)).as("StartingSavingRate")
+        val totalTaxableIncome = Print(TotalTaxableIncome(totalIncomeReceived = BigDecimal(totalProfitFromSelfEmployments.toInt + totalSavingsIncome.toInt),
+          totalDeduction = totalDeduction)).as("TotalTaxableIncome")
+        val personalSavingsAllowance = Print(PersonalSavingsAllowance(totalTaxableIncome = totalTaxableIncome)).as("PersonalSavingsAllowance")
+        val taxableSavingsIncome = Print(TaxableSavingsIncome(totalSavingsIncome = totalSavingsIncome.toInt, totalDeduction = totalDeduction,
+          totalProfitFromSelfEmployments = totalProfitFromSelfEmployments.toInt)).as("TaxableSavingsIncome")
+        println("==========================================")
+
+        SavingsIncomeTax(taxableSavingsIncome = taxableSavingsIncome, startingSavingsRate = savingStartingRate,
+          personalSavingsAllowance = personalSavingsAllowance, totalTaxableIncome = totalTaxableIncome) shouldBe Seq(
+          TaxBandAllocation(startingRateAmount.toInt, SavingsStartingTaxBand),
+          TaxBandAllocation(nilRateAmount.toInt, SavingsNilTaxBand),
+          TaxBandAllocation(basicRateTaxAmount.toInt, BasicTaxBand),
+          TaxBandAllocation(0, HigherTaxBand),
+          TaxBandAllocation(0, AdditionalHigherTaxBand))
+
+      }
+
     }
 
   }
