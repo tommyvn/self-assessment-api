@@ -15,11 +15,11 @@ class LiabilityControllerSpec extends BaseFunctionalSpec {
       given()
         .userIsAuthorisedForTheResource(saUtr)
       .when()
-        .post(s"/$saUtr/$taxYear/liabilities")
+        .post(s"/$saUtr/$taxYear/liability")
       .thenAssertThat()
         .statusIs(202)
         .contentTypeIsHalJson()
-        .bodyHasLink("self", s"""^/self-assessment/$saUtr/$taxYear/liabilities/.+""".r)
+        .bodyHasLink("self", s"""^/self-assessment/$saUtr/$taxYear/liability""".r)
     }
   }
 
@@ -34,125 +34,131 @@ class LiabilityControllerSpec extends BaseFunctionalSpec {
       val expectedJson =
         s"""
            |{
-           |    "class4Nic": {
-           |        "calculations": [],
-           |        "total": 0
-           |    },
-           |    "credits": [],
            |    "income": {
-           |        "incomes": {
-           |            "employment": [],
-           |            "selfEmployment": [
-           |              {
-           |                  "profit": 58529,
-           |                  "taxableProfit": 48529
-           |              },
-           |              {
-           |                  "profit": 74529,
-           |                  "taxableProfit": 64529
-           |              }
-           |            ],
-           |            "interestFromUKBanksAndBuildingSocieties": [
-           |              {
-           |                "totalInterest": 3000
-           |              }
-           |            ],
-           |            "dividendsFromUKSources": [
-           |              {
-           |                "totalDividend": 3000
-           |              }
-           |            ]
+           |      "incomes": {
+           |        "nonSavings": {
+           |          "employment": [],
+           |          "selfEmployment": [
+           |            {
+           |              "profit": 58529,
+           |              "taxableProfit": 48529
+           |            },
+           |            {
+           |              "profit": 74529,
+           |              "taxableProfit": 64529
+           |            }
+           |          ]
            |        },
-           |        "deductions": {
-           |            "incomeTaxRelief": 20000,
-           |            "personalAllowance": 1471,
-           |            "totalDeductions": 21471
+           |        "savings": {
+           |          "fromUKBanksAndBuildingSocieties": [
+           |            {
+           |              "totalInterest": 3000
+           |            }
+           |          ]
            |        },
-           |        "totalIncomeReceived": 139058,
-           |        "totalIncomeOnWhichTaxIsDue": 117587
+           |        "dividends": {
+           |          "fromUKSources": [
+           |            {
+           |              "totalDividend": 3000
+           |            }
+           |          ]
+           |        },
+           |        "total": 139058
+           |      },
+           |      "deductions": {
+           |        "incomeTaxRelief": 20000,
+           |        "personalAllowance": 1471,
+           |        "total": 21471
+           |      },
+           |      "totalIncomeOnWhichTaxIsDue": 117587
            |    },
            |    "incomeTaxCalculations": {
-           |       "payPensionsProfits": [
-           |            {
-           |                "chargedAt": "20%",
-           |                "tax": 6400,
-           |                "taxBand": "basicRate",
-           |                "taxableAmount": 32000
-           |            },
-           |            {
-           |                "chargedAt": "40%",
-           |                "tax": 31834,
-           |                "taxBand": "higherRate",
-           |                "taxableAmount": 79587
-           |            },
-           |            {
-           |                "chargedAt": "45%",
-           |                "tax": 0,
-           |                "taxBand": "additionalHigherRate",
-           |                "taxableAmount": 0
-           |            }
-           |       ],
-           |       "savingsIncome": [
-           |            {
-           |                "chargedAt": "0%",
-           |                "tax": 0,
-           |                "taxBand": "nilRate",
-           |                "taxableAmount": 500
-           |            },
-           |            {
-           |                "chargedAt": "0%",
-           |                "tax": 0,
-           |                "taxBand": "startingRate",
-           |                "taxableAmount": 0
-           |            },
-           |            {
-           |                "chargedAt": "20%",
-           |                "tax": 0,
-           |                "taxBand": "basicRate",
-           |                "taxableAmount": 0
-           |            },
-           |            {
-           |                "chargedAt": "40%",
-           |                "tax": 1000,
-           |                "taxBand": "higherRate",
-           |                "taxableAmount": 2500
-           |            },
-           |            {
-           |                "chargedAt": "45%",
-           |                "tax": 0,
-           |                "taxBand": "additionalHigherRate",
-           |                "taxableAmount": 0
-           |            }
-           |    ],
-                "dividends": [
-           |            {
-           |                "chargedAt": "0%",
-           |                "tax": 0,
-           |                "taxBand": "nilRate",
-           |                "taxableAmount": 3000
-           |            },
-           |            {
-           |                "chargedAt": "7.5%",
-           |                "tax": 0,
-           |                "taxBand": "basicRate",
-           |                "taxableAmount": 0
-           |            },
-           |            {
-           |                "chargedAt": "32.5%",
-           |                "tax": 0,
-           |                "taxBand": "higherRate",
-           |                "taxableAmount": 0
-           |            },
-           |            {
-           |                "chargedAt": "38.1%",
-           |                "tax": 0,
-           |                "taxBand": "additionalHigherRate",
-           |                "taxableAmount": 0
-           |            }
-           |    ],
-           |    "incomeTaxCharged": 39234
+           |      "nonSavings": [
+           |        {
+           |          "chargedAt": "20%",
+           |          "tax": 6400,
+           |          "taxBand": "basicRate",
+           |          "taxableAmount": 32000
+           |        },
+           |        {
+           |          "chargedAt": "40%",
+           |          "tax": 31834,
+           |          "taxBand": "higherRate",
+           |          "taxableAmount": 79587
+           |        },
+           |        {
+           |          "chargedAt": "45%",
+           |          "tax": 0,
+           |          "taxBand": "additionalHigherRate",
+           |          "taxableAmount": 0
+           |        }
+           |      ],
+           |      "savings": [
+           |        {
+           |          "chargedAt": "0%",
+           |          "tax": 0,
+           |          "taxBand": "nilRate",
+           |          "taxableAmount": 500
+           |        },
+           |        {
+           |          "chargedAt": "0%",
+           |          "tax": 0,
+           |          "taxBand": "startingRate",
+           |          "taxableAmount": 0
+           |        },
+           |        {
+           |          "chargedAt": "20%",
+           |          "tax": 0,
+           |          "taxBand": "basicRate",
+           |          "taxableAmount": 0
+           |        },
+           |        {
+           |          "chargedAt": "40%",
+           |          "tax": 1000,
+           |          "taxBand": "higherRate",
+           |          "taxableAmount": 2500
+           |        },
+           |        {
+           |          "chargedAt": "45%",
+           |          "tax": 0,
+           |          "taxBand": "additionalHigherRate",
+           |          "taxableAmount": 0
+           |        }
+           |      ],
+           |      "dividends": [
+           |        {
+           |          "chargedAt": "0%",
+           |          "tax": 0,
+           |          "taxBand": "nilRate",
+           |          "taxableAmount": 3000
+           |        },
+           |        {
+           |          "chargedAt": "7.5%",
+           |          "tax": 0,
+           |          "taxBand": "basicRate",
+           |          "taxableAmount": 0
+           |        },
+           |        {
+           |          "chargedAt": "32.5%",
+           |          "tax": 0,
+           |          "taxBand": "higherRate",
+           |          "taxableAmount": 0
+           |        },
+           |        {
+           |          "chargedAt": "38.1%",
+           |          "tax": 0,
+           |          "taxBand": "additionalHigherRate",
+           |          "taxableAmount": 0
+           |        }
+           |      ],
+           |      "total": 39234
            |    },
-           |    "totalTaxDue": 0
+           |    "taxDeducted": {
+           |      "interestFromUk": 600,
+           |      "total": 600
+           |    },
+           |    "totalTaxDue": 38634,
+           |    "totalTaxOverpaid": 0
            |}
         """.stripMargin
 
@@ -203,36 +209,14 @@ class LiabilityControllerSpec extends BaseFunctionalSpec {
         .thenAssertThat()
         .statusIs(201)
         .when()
-        .post(s"/$saUtr/$taxYear/liabilities")
+        .post(s"/$saUtr/$taxYear/liability")
         .thenAssertThat()
         .statusIs(202)
         .when()
-        .get(s"/$saUtr/$taxYear/liabilities/%liabilityId%")
+        .get(s"/$saUtr/$taxYear/liability")
         .thenAssertThat()
         .statusIs(200)
         .bodyIsLike(expectedJson)
     }
   }
-
-  "delete liability" should {
-    "return a resourceIsNotImplemented response" in {
-      given()
-        .userIsAuthorisedForTheResource(saUtr)
-        .when()
-        .delete(s"/$saUtr/$taxYear/liabilities/1234")
-        .thenAssertThat()
-        .isNotImplemented
-    }
-  }
-
-  "find liability" should {
-    "return a resourceIsNotImplemented response" in {
-      given().userIsAuthorisedForTheResource(saUtr)
-        .when()
-        .get(s"/$saUtr/$taxYear/liabilities")
-        .thenAssertThat()
-        .isNotImplemented
-    }
-  }
-
 }

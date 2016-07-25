@@ -21,7 +21,7 @@ import uk.gov.hmrc.domain.SaUtr
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType
 import uk.gov.hmrc.selfassessmentapi.domain.{Deductions, _}
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, SavingsNilTaxBand, SavingsStartingTaxBand, TaxBandRangeCheck}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, NilTaxBand, SavingsStartingTaxBand, TaxBandRangeCheck}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{CapAt, _}
 
@@ -36,22 +36,56 @@ object SavingsIncomeTax {
   def apply(selfAssessment: SelfAssessment): Seq[TaxBandAllocation] = apply(TaxableSavingsIncome(selfAssessment),
     StartingSavingsRate(selfAssessment), PersonalSavingsAllowance(selfAssessment), TotalTaxableIncome(selfAssessment))
 
-  def savingStartingRateTaxBandAmount(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal): BigDecimal = {
-    startingSavingsRate
+  def netTaxableSavingsIncome(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal): BigDecimal = {
+    PositiveOrZero(taxableSavingsIncome - (startingSavingsRate + personalSavingsAllowance))
   }
 
-  def basicTaxRateBandAmount(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal): BigDecimal = {
-    taxableSavingsIncome - (startingSavingsRate + personalSavingsAllowance)
+  object SavingIncomeRange {
+    def apply(netTaxableSavingsIncome: BigDecimal, totalTaxableIncome: BigDecimal) = (totalTaxableIncome - netTaxableSavingsIncome, totalTaxableIncome)
   }
 
   def apply(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal, totalTaxableIncome: BigDecimal): Seq[TaxBandAllocation] = {
-    Seq(
-      TaxBandAllocation(savingStartingRateTaxBandAmount(taxableSavingsIncome, startingSavingsRate), SavingsStartingTaxBand),
-      TaxBandAllocation(personalSavingsAllowance, SavingsNilTaxBand),
-      TaxBandAllocation(basicTaxRateBandAmount(taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance), BasicTaxBand),
-      TaxBandAllocation(0, HigherTaxBand),
-      TaxBandAllocation(0, AdditionalHigherTaxBand))
+    BandDistribution(SavingIncomeRange(netTaxableSavingsIncome(taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance), totalTaxableIncome)) match {
+      case (basicRateBandAmount, higherRateBandAmount, additionalHigherRateBandAmount) =>
+        Seq(
+          TaxBandAllocation(if(taxableSavingsIncome == 0) 0 else startingSavingsRate, SavingsStartingTaxBand),
+          TaxBandAllocation(personalSavingsAllowance, NilTaxBand),
+          TaxBandAllocation(basicRateBandAmount, BasicTaxBand),
+          TaxBandAllocation(higherRateBandAmount, HigherTaxBand),
+          TaxBandAllocation(additionalHigherRateBandAmount, AdditionalHigherTaxBand))
+    }
   }
+
+  object BandDistribution {
+    def allocatedToAdditionalHigherRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal): BigDecimal = {
+      savingsIncomeStart match {
+        case start if start >= HigherTaxBand.upperBound.get => savingsIncomeEnd - savingsIncomeStart
+        case _ => PositiveOrZero(savingsIncomeEnd - HigherTaxBand.upperBound.get)
+      }
+    }
+
+    def allocatedToHigherRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal) =
+      (savingsIncomeEnd - savingsIncomeStart) - (allocatedToBasicRateBand(savingsIncomeStart, savingsIncomeEnd)
+        + allocatedToAdditionalHigherRateBand(savingsIncomeStart, savingsIncomeEnd))
+
+    def allocatedToBasicRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal): BigDecimal = {
+      savingsIncomeEnd match {
+        case end if end <= BasicTaxBand.upperBound.get => savingsIncomeEnd - savingsIncomeStart
+        case _ => PositiveOrZero(BasicTaxBand.upperBound.get - savingsIncomeStart)
+      }
+    }
+
+    def apply(tuple: (BigDecimal, BigDecimal)) = {
+      tuple match {
+        case (savingsIncomeStart, savingsIncomeEnd) =>
+          println(s"start:$savingsIncomeStart -> end:$savingsIncomeEnd")
+          (allocatedToBasicRateBand(savingsIncomeStart, savingsIncomeEnd), allocatedToHigherRateBand(savingsIncomeStart, savingsIncomeEnd),
+            allocatedToAdditionalHigherRateBand(savingsIncomeStart, savingsIncomeEnd))
+      }
+    }
+
+  }
+
 }
 
 object PersonalDividendAllowance {
@@ -82,18 +116,14 @@ object PersonalDividendAllowance {
 
 }
 object PayPensionProfitsTax {
-  private def allocateToTaxBands(income: BigDecimal, taxBands: Seq[TaxBand]): Seq[TaxBandAllocation] = taxBands match {
-    case taxBand :: nextBands =>
-      Seq(TaxBandAllocation(taxBand.allocate(income), taxBand)) ++ allocateToTaxBands(income - taxBand.allocate(income), nextBands)
-    case Nil => Nil
-  }
-
-  def apply(selfAssessment: SelfAssessment): Seq[TaxBandAllocation] = {
-    apply(TotalProfitFromSelfEmployments(selfAssessment), TotalDeduction(selfAssessment))
-  }
+  def taxBandAmount(netTaxableProfit: BigDecimal, taxBand: TaxBand) = CapAt(PositiveOrZero(netTaxableProfit - (taxBand.lowerBound - 1)), taxBand.width)
 
   def apply(totalProfitFromSelfEmployments: BigDecimal, totalDeduction: BigDecimal): Seq[TaxBandAllocation] = {
-    allocateToTaxBands(PositiveOrZero(totalProfitFromSelfEmployments - totalDeduction), Seq(BasicTaxBand, HigherTaxBand, AdditionalHigherTaxBand))
+    val netTaxableProfit = PositiveOrZero(totalProfitFromSelfEmployments - totalDeduction)
+    Seq(TaxBandAllocation(taxBandAmount(netTaxableProfit, BasicTaxBand), BasicTaxBand),
+      TaxBandAllocation(taxBandAmount(netTaxableProfit, HigherTaxBand), HigherTaxBand),
+      TaxBandAllocation(taxBandAmount(netTaxableProfit, AdditionalHigherTaxBand), AdditionalHigherTaxBand)
+    )
   }
 
 }
@@ -124,7 +154,7 @@ object IncomeTaxRelief {
 
 object IncomeTaxReliefAndDeductions {
   def apply(selfAssessment: SelfAssessment) = {
-    new Deductions(incomeTaxRelief = IncomeTaxRelief(selfAssessment), totalDeductions = TotalDeduction(selfAssessment),
+    new Deductions(incomeTaxRelief = IncomeTaxRelief(selfAssessment), total = TotalDeduction(selfAssessment),
       personalAllowance = PersonalAllowance(selfAssessment))
   }
 }

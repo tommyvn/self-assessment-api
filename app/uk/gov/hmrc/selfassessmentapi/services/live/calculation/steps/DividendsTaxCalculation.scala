@@ -17,7 +17,7 @@
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
 
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, TaxBand, TaxBandAllocation}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, TaxBand}
 
 
 object DividendsTaxCalculation extends CalculationStep {
@@ -28,14 +28,16 @@ object DividendsTaxCalculation extends CalculationStep {
 
     val deductions = liability.deductionsRemaining.getOrElse(throw PropertyNotComputedException("deductionsRemaining"))
 
-    val (basicBandAvailability, higherBandAvailabilityAdjustment) = adjustedAvailability(BasicTaxBand, liability)
-    val (higherBandAvailability, _) = adjustedAvailability(HigherTaxBand, liability)
+    val availabilities = List((available(BasicTaxBand, liability), BigDecimal(0)),
+                              (available(HigherTaxBand, liability), BigDecimal(0)))
+    val taxExemptIncome = List((BigDecimal(0), getTaxExemptIncome(liability)))
+    val adjustedAvailabilities = availabilities.foldLeft(taxExemptIncome)(calcAvailability).reverse.tail.unzip._1
 
     val taxBands = Seq(
-      TaxBandState(taxBand = DividendsNilTaxBand, available = dividendAllowance),
-      TaxBandState(taxBand = DividendBasicTaxBand, available = basicBandAvailability),
-      TaxBandState(taxBand = DividendHigherTaxBand, available = higherBandAvailability - higherBandAvailabilityAdjustment),
-      TaxBandState(taxBand = DividendAdditionalHigherTaxBand, available = AdditionalHigherTaxBand.width)
+      TaxBandState(taxBand = NilTaxBand, available = dividendAllowance),
+      TaxBandState(taxBand = BasicTaxBand, available = adjustedAvailabilities(0)),
+      TaxBandState(taxBand = HigherTaxBand, available = adjustedAvailabilities(1)),
+      TaxBandState(taxBand = AdditionalHigherTaxBand, available = AdditionalHigherTaxBand.width)
     )
 
     val (taxableDividendsIncome, deductionsRemaining) = applyDeductions(liability.dividendsFromUKSources.map(_.totalDividend).sum, deductions)
@@ -43,27 +45,21 @@ object DividendsTaxCalculation extends CalculationStep {
     liability.copy(deductionsRemaining = Some(deductionsRemaining), dividendsIncome = allocateToTaxBands(taxableDividendsIncome, taxBands))
   }
 
-  private def untaxedSavings(savingsIncome: Seq[TaxBandAllocation]) = {
-    sum(savingsIncome.find(_.taxBand == SavingsNilTaxBand).map(_.amount),
-      savingsIncome.find(_.taxBand == SavingsStartingTaxBand).map(_.amount))
+  private def getTaxExemptIncome(liability: MongoLiability): BigDecimal = {
+    sum(liability.savingsIncome.find(_.taxBand == NilTaxBand).map(_.amount),
+      liability.savingsIncome.find(_.taxBand == SavingsStartingTaxBand).map(_.amount),
+      Some(capAt(liability.dividendsFromUKSources.map(_.totalDividend).sum, dividendAllowance)))
   }
 
   private def available(taxBand: TaxBand, liability: MongoLiability) = {
     (for {
       fromSavings <- liability.savingsIncome.find(_.taxBand == taxBand)
-      fromPpp <- liability.payPensionsProfitsIncome.find(_.taxBand == taxBand)
+      fromPpp <- liability.nonSavingsIncome.find(_.taxBand == taxBand)
     } yield (fromPpp + fromSavings).available).getOrElse(taxBand.width)
   }
 
-  private def adjustedAvailability(band: TaxBand, liability: MongoLiability): (BigDecimal, BigDecimal) = {
-
-    val availabilityForBand = available(band, liability)
-
-    if (band.width - availabilityForBand >= 0) {
-      val adjustedAvailabilityForBand = availabilityForBand - untaxedSavings(liability.savingsIncome)
-      if (adjustedAvailabilityForBand >= 0) (adjustedAvailabilityForBand, 0) else (0, adjustedAvailabilityForBand.abs)
-    } else {
-      (availabilityForBand, 0)
-    }
+  private def calcAvailability(input : List[(BigDecimal, BigDecimal)], elem: (BigDecimal, BigDecimal)) : List[(BigDecimal, BigDecimal)] = {
+    val availability = elem._1 - input.head._2
+    (if (availability >= 0) (availability, BigDecimal(0)) else (BigDecimal(0), availability.abs)) :: input
   }
 }

@@ -18,20 +18,16 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
 
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
 
-object SavingsStartingRateCalculation extends CalculationStep {
-
-  private val startingRateLimit = BigDecimal(5000)
+object TotalAllowancesAndReliefsCalculation extends CalculationStep {
 
   override def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability = {
 
-    val nonSavingsIncomeReceived = liability.nonSavingsIncomeReceived.getOrElse(throw PropertyNotComputedException("nonSavingsIncomeReceived"))
+    val incomeTaxRelief = liability.allowancesAndReliefs.incomeTaxRelief.getOrElse(throw PropertyNotComputedException("incomeTaxRelief"))
 
-    val deductions = liability.totalAllowancesAndReliefs.getOrElse(throw PropertyNotComputedException("totalAllowancesAndReliefs"))
+    val personalAllowance = liability.allowancesAndReliefs.personalAllowance.getOrElse(throw PropertyNotComputedException("personalAllowance"))
 
-    val (profitAfterDeductions, _) = applyDeductions(nonSavingsIncomeReceived, deductions)
+    val totalDeductions = incomeTaxRelief + personalAllowance
 
-    val savingsStartingRate = positiveOrZero(startingRateLimit - profitAfterDeductions)
-
-    liability.copy(allowancesAndReliefs = liability.allowancesAndReliefs.copy(savingsStartingRate = Some(savingsStartingRate)))
+    liability.copy(totalAllowancesAndReliefs = Some(totalDeductions), deductionsRemaining = Some(totalDeductions))
   }
 }

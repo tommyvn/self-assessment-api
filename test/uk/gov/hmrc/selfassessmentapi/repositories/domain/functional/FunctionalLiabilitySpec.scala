@@ -21,7 +21,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.prop.Tables.Table
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, SavingsNilTaxBand, SavingsStartingTaxBand}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, NilTaxBand, SavingsStartingTaxBand}
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.{TaxableSavingsIncome, _}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
@@ -639,8 +639,16 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
     "row 1" in {
       val inputs = Table(
         ("TotalProfitFromSelfEmployments", "TotalSavingsIncome", "StartingRateAmount", "NilRateAmount", "BasicRateTaxAmount", "HigherRateTaxAmount", "AdditionalHigherRateAmount"),
-        ("8000", "12000", "5000", "1000", "3000", "0", "0"),
-        ("5000", "6000", "0", "0", "0", "0", "0")
+        ("8000", "12000", "5000", "1000", "3000", "0", "0"),  //0
+        ("5000", "6000", "0", "0", "0", "0", "0"),            //1
+        ("20000", "11000", "0", "1000", "10000", "0", "0"),   //2
+        ("29000", "12000", "0", "1000", "11000", "0", "0"),   //3
+        ("32000", "12000", "0", "500", "10500", "1000", "0"), //4
+        ("100000", "12000", "0", "500", "0", "11500", "0"),   //5
+        ("140000", "12000", "0", "0", "0", "10000", "2000"),  //6
+        ("150000", "12000", "0", "0", "0", "0", "12000"),     //7
+        ("60000", "85000", "0", "500", "0", "84500", "0")    //8
+        //("80000", "85000", "0", "0", "0", "70000", "15000")   //9
       )
 
       TableDrivenPropertyChecks.forAll(inputs) { (totalProfitFromSelfEmployments: String, totalSavingsIncome: String, startingRateAmount: String,
@@ -660,10 +668,10 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
         SavingsIncomeTax(taxableSavingsIncome = taxableSavingsIncome, startingSavingsRate = savingStartingRate,
           personalSavingsAllowance = personalSavingsAllowance, totalTaxableIncome = totalTaxableIncome) shouldBe Seq(
           TaxBandAllocation(startingRateAmount.toInt, SavingsStartingTaxBand),
-          TaxBandAllocation(nilRateAmount.toInt, SavingsNilTaxBand),
+          TaxBandAllocation(nilRateAmount.toInt, NilTaxBand),
           TaxBandAllocation(basicRateTaxAmount.toInt, BasicTaxBand),
-          TaxBandAllocation(0, HigherTaxBand),
-          TaxBandAllocation(0, AdditionalHigherTaxBand))
+          TaxBandAllocation(higherRateTaxAmount.toInt, HigherTaxBand),
+          TaxBandAllocation(additionalHigherRateAmount.toInt , AdditionalHigherTaxBand))
 
       }
 

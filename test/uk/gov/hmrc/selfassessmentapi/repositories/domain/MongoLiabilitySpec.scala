@@ -17,7 +17,7 @@
 package uk.gov.hmrc.selfassessmentapi.repositories.domain
 
 import uk.gov.hmrc.selfassessmentapi.domain._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, NilTaxBand, SavingsStartingTaxBand}
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
 
 class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
@@ -26,7 +26,7 @@ class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
     "map to liability" in {
 
-      val liability = MongoLiability.create(generateSaUtr(), taxYear).copy(
+      val liability = aLiability().copy(
         profitFromSelfEmployments = Seq(
           SelfEmploymentIncome(sourceId = "seId1", taxableProfit = 10, profit = 20, lossBroughtForward = 15),
           SelfEmploymentIncome(sourceId = "seId2", taxableProfit = 20, profit = 40, lossBroughtForward = 30)
@@ -46,77 +46,101 @@ class MongoLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
       )
 
       liability.toLiability shouldBe Liability(
-        id = Some(liability.liabilityId),
         income = IncomeSummary(
           incomes = IncomeFromSources(
-            selfEmployment = Seq(
-              Income("seId1", taxableProfit = 10, profit = 20),
-              Income("seId2", taxableProfit = 20, profit = 40)
+            nonSavings = NonSavingsIncomes(
+              selfEmployment = Seq(
+                Income("seId1", taxableProfit = 10, profit = 20),
+                Income("seId2", taxableProfit = 20, profit = 40)
+              ),
+              employment = Nil
             ),
-            interestFromUKBanksAndBuildingSocieties = Seq(
-              domain.InterestFromUKBanksAndBuildingSocieties("interestId1", totalInterest = 20),
-              domain.InterestFromUKBanksAndBuildingSocieties("interestId2", totalInterest = 40)
+            savings = SavingsIncomes(
+              fromUKBanksAndBuildingSocieties = Seq(
+                domain.InterestFromUKBanksAndBuildingSocieties("interestId1", totalInterest = 20),
+                domain.InterestFromUKBanksAndBuildingSocieties("interestId2", totalInterest = 40)
+              )
             ),
-            dividendsFromUKSources = Seq(
-              domain.DividendsFromUKSources("divId1", totalDividend = 100)
+            dividends = DividendsIncomes(
+              fromUKSources = Seq(
+                domain.DividendsFromUKSources("divId1", totalDividend = 100)
+              )
             ),
-            employment = Nil
+            total = 1000
           ),
-          deductions = Some(Deductions(personalAllowance = 3000, incomeTaxRelief = 2000, totalDeductions = 5000)),
-          totalIncomeReceived = 1000,
+          deductions = Some(Deductions(personalAllowance = 3000, incomeTaxRelief = 2000, total = 5000)),
           totalIncomeOnWhichTaxIsDue = 4000
         ),
         incomeTaxCalculations = IncomeTaxCalculations(Nil, Nil, Nil, 0),
-        credits = Nil,
-        class4Nic = CalculatedAmount(Nil, 0),
-        totalTaxDue = 0
+        taxDeducted = TaxDeducted(0, 0),
+        totalTaxDue = 0,
+        totalTaxOverpaid = 0
       )
     }
 
     "map to liability and calculate the income tax charged" in {
 
-      val liability = MongoLiability.create(generateSaUtr(), taxYear).copy(
-        payPensionsProfitsIncome = Seq(
+      val liability = aLiability().copy(
+        nonSavingsIncome = Seq(
           aTaxBandAllocation(1000, BasicTaxBand),
           aTaxBandAllocation(2000, HigherTaxBand),
           aTaxBandAllocation(2000, AdditionalHigherTaxBand)
         ),
         savingsIncome = Seq(
-          aTaxBandAllocation(1000, BasicTaxBand)
+          aTaxBandAllocation(1000, SavingsStartingTaxBand),
+          aTaxBandAllocation(1000, NilTaxBand),
+          aTaxBandAllocation(1000, BasicTaxBand),
+          aTaxBandAllocation(1000, HigherTaxBand),
+          aTaxBandAllocation(1000, AdditionalHigherTaxBand)
         ),
         dividendsIncome = Seq(
-          aTaxBandAllocation(1000, BasicTaxBand)
+          aTaxBandAllocation(1000, NilTaxBand),
+          aTaxBandAllocation(1000, BasicTaxBand),
+          aTaxBandAllocation(1000, HigherTaxBand),
+          aTaxBandAllocation(1000, AdditionalHigherTaxBand)
         )
       )
 
-      liability.toLiability.incomeTaxCalculations shouldBe IncomeTaxCalculations(
-        payPensionsProfits = Seq(
+      val result = liability.toLiability
+
+      result.incomeTaxCalculations shouldBe IncomeTaxCalculations(
+        nonSavings = Seq(
           aTaxBandSummary(BasicTaxBand.name, 1000, "20%", 200),
           aTaxBandSummary(HigherTaxBand.name, 2000, "40%", 800),
           aTaxBandSummary(AdditionalHigherTaxBand.name, 2000, "45%", 900)
         ),
-        savingsIncome = Seq(
-          aTaxBandSummary(BasicTaxBand.name, 1000, "20%", 200)
+        savings = Seq(
+          aTaxBandSummary(SavingsStartingTaxBand.name, 1000, "0%", 0),
+          aTaxBandSummary(NilTaxBand.name, 1000, "0%", 0),
+          aTaxBandSummary(BasicTaxBand.name, 1000, "20%", 200),
+          aTaxBandSummary(HigherTaxBand.name, 1000, "40%", 400),
+          aTaxBandSummary(AdditionalHigherTaxBand.name, 1000, "45%", 450)
         ),
         dividends = Seq(
-          aTaxBandSummary(BasicTaxBand.name, 1000, "20%", 200)
+          aTaxBandSummary(NilTaxBand.name, 1000, "0%", 0),
+          aTaxBandSummary(BasicTaxBand.name, 1000, "7.5%", 75),
+          aTaxBandSummary(HigherTaxBand.name, 1000, "32.5%", 325),
+          aTaxBandSummary(AdditionalHigherTaxBand.name, 1000, "38.1%", 381)
         ),
-        incomeTaxCharged = 2300
+        total = 3731
       )
-    }
-  }
-
-  "TaxBandSummary.tax" should {
-
-    "return correct tax for all tax bands" in {
-      aTaxBandAllocation(1000, BasicTaxBand).tax shouldBe 200
-      aTaxBandAllocation(1000, HigherTaxBand).tax shouldBe 400
-      aTaxBandAllocation(1000, AdditionalHigherTaxBand).tax shouldBe 450
+      result.totalTaxDue shouldBe 3731
+      result.totalTaxOverpaid shouldBe 0
     }
 
-    "return tax for given tax band and round down to the nearest pound" in {
-      aTaxBandAllocation(999, BasicTaxBand).tax shouldBe 199
-      aTaxBandAllocation(4, BasicTaxBand).tax shouldBe 0
+    "map to liability and calculate the income tax overpaid if total tax is negative" in {
+
+      val liability = aLiability().copy(
+        savingsIncome = Seq(
+          aTaxBandAllocation(1000, NilTaxBand)
+        ),
+        taxDeducted = Some(MongoTaxDeducted(
+          interestFromUk = 1000
+        ))
+      )
+      val result = liability.toLiability
+      result.totalTaxDue shouldBe 0
+      result.totalTaxOverpaid shouldBe 1000
     }
   }
 

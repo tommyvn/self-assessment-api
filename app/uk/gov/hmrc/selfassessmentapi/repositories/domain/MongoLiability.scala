@@ -22,6 +22,7 @@ import reactivemongo.bson.BSONObjectID
 import uk.gov.hmrc.domain.SaUtr
 import uk.gov.hmrc.mongo.json.ReactiveMongoFormats
 import uk.gov.hmrc.selfassessmentapi.domain._
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, NilTaxBand, SavingsStartingTaxBand}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.Math
 
 case class MongoLiability(id: BSONObjectID,
@@ -33,43 +34,89 @@ case class MongoLiability(id: BSONObjectID,
                           interestFromUKBanksAndBuildingSocieties: Seq[InterestFromUKBanksAndBuildingSocieties] = Nil,
                           dividendsFromUKSources: Seq[DividendsFromUKSources] = Nil,
                           totalIncomeReceived: Option[BigDecimal] = None,
-                          payPensionProfitsReceived: Option[BigDecimal] = None,
+                          nonSavingsIncomeReceived: Option[BigDecimal] = None,
                           totalTaxableIncome: Option[BigDecimal] = None,
                           totalAllowancesAndReliefs: Option[BigDecimal] = None,
                           deductionsRemaining: Option[BigDecimal] = None,
                           totalIncomeOnWhichTaxIsDue: Option[BigDecimal] = None,
-                          payPensionsProfitsIncome: Seq[TaxBandAllocation] = Nil,
+                          nonSavingsIncome: Seq[TaxBandAllocation] = Nil,
                           savingsIncome: Seq[TaxBandAllocation] = Nil,
                           dividendsIncome: Seq[TaxBandAllocation] = Nil,
-                          allowancesAndReliefs: AllowancesAndReliefs = AllowancesAndReliefs()) extends Math {
+                          allowancesAndReliefs: AllowancesAndReliefs = AllowancesAndReliefs(),
+                          taxDeducted: Option[MongoTaxDeducted] = None) extends Math {
+
+  private lazy val dividendsTaxes = dividendsIncome.map {
+    bandAllocation => bandAllocation.taxBand match {
+      case NilTaxBand => bandAllocation.toTaxBandSummary(0)
+      case BasicTaxBand => bandAllocation.toTaxBandSummary(7.5)
+      case HigherTaxBand => bandAllocation.toTaxBandSummary(32.5)
+      case AdditionalHigherTaxBand => bandAllocation.toTaxBandSummary(38.1)
+      case unsupported => throw new IllegalArgumentException(s"Unsupported dividends tax band: $unsupported")
+    }
+  }
+
+  private lazy val savingsTaxes = savingsIncome.map {
+    bandAllocation => bandAllocation.taxBand match {
+      case NilTaxBand => bandAllocation.toTaxBandSummary(0)
+      case SavingsStartingTaxBand => bandAllocation.toTaxBandSummary(0)
+      case BasicTaxBand => bandAllocation.toTaxBandSummary(20)
+      case HigherTaxBand => bandAllocation.toTaxBandSummary(40)
+      case AdditionalHigherTaxBand => bandAllocation.toTaxBandSummary(45)
+      case unsupported => throw new IllegalArgumentException(s"Unsupported savings tax band: $unsupported")
+    }
+  }
+
+  private lazy val nonSavingsTaxes = nonSavingsIncome.map {
+    bandAllocation => bandAllocation.taxBand match {
+      case BasicTaxBand => bandAllocation.toTaxBandSummary(20)
+      case HigherTaxBand => bandAllocation.toTaxBandSummary(40)
+      case AdditionalHigherTaxBand => bandAllocation.toTaxBandSummary(45)
+      case unsupported => throw new IllegalArgumentException(s"Unsupported non savings tax band: $unsupported")
+    }
+  }
+
+  private lazy val totalIncomeTax = (nonSavingsTaxes ++ savingsTaxes ++ dividendsTaxes).map(_.tax).sum
+
+  private lazy val totalTaxDeducted = taxDeducted.map(_.interestFromUk).getOrElse(BigDecimal(0))
+
+  private lazy val totalTaxDue = totalIncomeTax - totalTaxDeducted
 
   def toLiability =
     Liability(
-      id = Some(liabilityId),
       income = IncomeSummary(
         incomes = IncomeFromSources(
-          selfEmployment = profitFromSelfEmployments.map(_.toIncome),
-          interestFromUKBanksAndBuildingSocieties = interestFromUKBanksAndBuildingSocieties,
-          dividendsFromUKSources = dividendsFromUKSources,
-          employment = Nil
+          nonSavings = NonSavingsIncomes(
+            selfEmployment = profitFromSelfEmployments.map(_.toIncome),
+            employment = Nil
+          ),
+          savings = SavingsIncomes(
+            fromUKBanksAndBuildingSocieties = interestFromUKBanksAndBuildingSocieties
+          ),
+          dividends = DividendsIncomes(
+            fromUKSources = dividendsFromUKSources
+          ),
+          total = totalIncomeReceived.getOrElse(0)
         ),
         deductions = Some(Deductions(
           incomeTaxRelief = allowancesAndReliefs.incomeTaxRelief.getOrElse(0),
           personalAllowance = allowancesAndReliefs.personalAllowance.getOrElse(0),
-          totalDeductions = sum(allowancesAndReliefs.incomeTaxRelief, allowancesAndReliefs.personalAllowance)
+          total = sum(allowancesAndReliefs.incomeTaxRelief, allowancesAndReliefs.personalAllowance)
         )),
-        totalIncomeReceived = totalIncomeReceived.getOrElse(0),
         totalIncomeOnWhichTaxIsDue = totalIncomeOnWhichTaxIsDue.getOrElse(0)
       ),
       incomeTaxCalculations = IncomeTaxCalculations(
-        payPensionsProfits = payPensionsProfitsIncome.map(_.toTaxBandSummary),
-        savingsIncome = savingsIncome.map(_.toTaxBandSummary),
-        dividends = dividendsIncome.map(_.toTaxBandSummary),
-        incomeTaxCharged = (payPensionsProfitsIncome ++ savingsIncome ++ dividendsIncome).map(_.tax).sum
+        nonSavings = nonSavingsTaxes,
+        savings = savingsTaxes,
+        dividends = dividendsTaxes,
+        total = totalIncomeTax
       ),
-      credits = Nil,
-      class4Nic = CalculatedAmount(calculations = Nil, total = 0),
-      totalTaxDue = 0
+      taxDeducted = taxDeducted.map(taxDeducted =>
+        TaxDeducted(
+          interestFromUk = taxDeducted.interestFromUk,
+          total = totalTaxDeducted)
+      ).getOrElse(TaxDeducted(0, 0)),
+      totalTaxDue = if (totalTaxDue > 0) totalTaxDue else 0,
+      totalTaxOverpaid = if (totalTaxDue < 0) totalTaxDue.abs else 0
     )
 
   def totalSavingsIncome = interestFromUKBanksAndBuildingSocieties.map(_.totalInterest).sum
@@ -82,19 +129,21 @@ case class SelfEmploymentIncome(sourceId: SourceId, taxableProfit: BigDecimal, p
 
 case class TaxBandAllocation(amount: BigDecimal, taxBand: TaxBand) extends Math {
 
-  def toTaxBandSummary = uk.gov.hmrc.selfassessmentapi.domain.TaxBandSummary(taxBand.name, amount, s"${taxBand.chargedAt}%", tax)
+  def toTaxBandSummary(chargedAt: BigDecimal) = uk.gov.hmrc.selfassessmentapi.domain.TaxBandSummary(taxBand.name, amount, s"$chargedAt%", tax(chargedAt))
 
-  def tax: BigDecimal = roundDown(amount * taxBand.chargedAt / 100)
+  def tax(chargedAt: BigDecimal): BigDecimal = roundDown(amount * chargedAt / 100)
 
   def available: BigDecimal = positiveOrZero(taxBand.width - amount)
 
-  def +(other: TaxBandAllocation) = {
+  def + (other: TaxBandAllocation) = {
     require(taxBand == other.taxBand)
     TaxBandAllocation(amount + other.amount, taxBand)
   }
 }
 
 case class AllowancesAndReliefs(personalAllowance: Option[BigDecimal] = None, personalSavingsAllowance: Option[BigDecimal] = None, incomeTaxRelief: Option[BigDecimal] = None, savingsStartingRate: Option[BigDecimal] = None)
+
+case class MongoTaxDeducted(interestFromUk: BigDecimal)
 
 object MongoLiability {
 
@@ -103,6 +152,7 @@ object MongoLiability {
   implicit val incomeFormats = Json.format[SelfEmploymentIncome]
   implicit val taxBandAllocationFormats = Json.format[TaxBandAllocation]
   implicit val allowancesAndReliefsFormats = Json.format[AllowancesAndReliefs]
+  implicit val taxDeductedFormats = Json.format[MongoTaxDeducted]
   implicit val liabilityFormats = Json.format[MongoLiability]
 
   def create(saUtr: SaUtr, taxYear: TaxYear): MongoLiability = {

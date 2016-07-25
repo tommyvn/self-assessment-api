@@ -29,12 +29,12 @@ class SelfAssessmentApiDefinition(apiContext: String, apiStatus: APIStatus) {
       scopes = Seq(
         Scope(
           key = readScope,
-          name = "Self-Assessment - Read",
+          name = "View your Self-Assessment information",
           description = "Allow read access to self assessment data"
         ),
         Scope(
           key = writeScope,
-          name = "Self-Assessment - Write",
+          name = "Change your Self-Assessment information",
           description = "Allow write access to self assessment data"
         )
       ),
@@ -159,7 +159,7 @@ class SelfAssessmentApiDefinition(apiContext: String, apiStatus: APIStatus) {
                 scope = Some(readScope)
               ),
               Endpoint(
-                uriPattern = "/{utr}/{taxYear}/liabilities",
+                uriPattern = "/{utr}/{taxYear}/liability",
                 endpointName = "Request Liability",
                 method = HttpMethod.POST,
                 authType = AuthType.USER,
@@ -167,28 +167,12 @@ class SelfAssessmentApiDefinition(apiContext: String, apiStatus: APIStatus) {
                 scope = Some(writeScope)
               ),
               Endpoint(
-                uriPattern = "/{utr}/{taxYear}/liabilities/{liabilityId}",
+                uriPattern = "/{utr}/{taxYear}/liability",
                 endpointName = "Retrieve Liability",
                 method = HttpMethod.GET,
                 authType = AuthType.USER,
                 throttlingTier = ResourceThrottlingTier.UNLIMITED,
                 scope = Some(readScope)
-              ),
-              Endpoint(
-                uriPattern = "/{utr}/{taxYear}/liabilities",
-                endpointName = "Retrieve Liabilities",
-                method = HttpMethod.GET,
-                authType = AuthType.USER,
-                throttlingTier = ResourceThrottlingTier.UNLIMITED,
-                scope = Some(readScope)
-              ),
-              Endpoint(
-                uriPattern = "/{utr}/{taxYear}/liabilities/{liabilityId}",
-                endpointName = "Delete Liability",
-                method = HttpMethod.DELETE,
-                authType = AuthType.USER,
-                throttlingTier = ResourceThrottlingTier.UNLIMITED,
-                scope = Some(writeScope)
               )
             )
           )
