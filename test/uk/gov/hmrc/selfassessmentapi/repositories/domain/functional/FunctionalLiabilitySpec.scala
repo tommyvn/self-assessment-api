@@ -222,23 +222,23 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
 
   "Personal Allowance" should {
     "be 11,000 if total taxable income is less than 100,000" in {
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 99999) shouldBe 11000
+      PersonalAllowance(totalIncomeReceived = 99999) shouldBe 11000
     }
 
     "be 11,000 if total taxable income is 100,001" in {
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 100001) shouldBe 11000
+      PersonalAllowance(totalIncomeReceived = 100001) shouldBe 11000
     }
 
     "be 11,000 - (TotalIncome - 100,000)/2 if total taxable income is greater than 100,000 but less than 122,000" in {
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 121999) shouldBe (11000 - (121999 - 100000)/2)
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 120000) shouldBe (11000 - (120000 - 100000)/2)
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 110000) shouldBe (11000 - (110000 - 100000)/2)
+      PersonalAllowance(totalIncomeReceived = 121999) shouldBe (11000 - (121999 - 100000)/2)
+      PersonalAllowance(totalIncomeReceived = 120000) shouldBe (11000 - (120000 - 100000)/2)
+      PersonalAllowance(totalIncomeReceived = 110000) shouldBe (11000 - (110000 - 100000)/2)
     }
 
     "be 0 if total taxable income is greater than equal to 122,000" in {
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 122000) shouldBe 0
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 122001) shouldBe 0
-      PersonalAllowance(totalTaxableProfitFromSelfEmployments = 132000) shouldBe 0
+      PersonalAllowance(totalIncomeReceived = 122000) shouldBe 0
+      PersonalAllowance(totalIncomeReceived = 122001) shouldBe 0
+      PersonalAllowance(totalIncomeReceived = 132000) shouldBe 0
     }
   }
 
@@ -601,34 +601,6 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
   }
 
   "SavingsIncomeTax" should {
-    /*"be 0 charged at SavingsStartingTaxBand(0%) if TaxableSavingIncome is less that StartingSavingRate" in {
-      SavingsIncomeTax(taxableSavingsIncome = 4999, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
-        TaxBandAllocation(0, SavingsStartingTaxBand),
-        TaxBandAllocation(0, SavingsNilTaxBand),
-        TaxBandAllocation(0, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
-    }
-
-    "be 0 charged at SavingsStartingTaxBand(0%) if TaxableSavingIncome is equal to StartingSavingRate" in {
-      SavingsIncomeTax(taxableSavingsIncome = 5000, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
-        TaxBandAllocation(0, SavingsStartingTaxBand),
-        TaxBandAllocation(0, SavingsNilTaxBand),
-        TaxBandAllocation(0, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
-    }
-
-    "be 0 charged at SavingsStartingTaxBand(0%) and 0 at SavingsNilTaxBand(0%) if TaxableSavingIncome is more than StartingSavingRate and " +
-      "TaxableSavingIncome - StartingSavingsRate is less than PersonalSavingsAllowance" in {
-      SavingsIncomeTax(taxableSavingsIncome = 5001, startingSavingsRate = 5000, personalSavingsAllowance = 1000, totalTaxableIncome = 1) shouldBe Seq(
-        TaxBandAllocation(0, SavingsStartingTaxBand),
-        TaxBandAllocation(0, SavingsNilTaxBand),
-        TaxBandAllocation(0, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
-    }*/
-
     case class Print(value: BigDecimal) {
       def as(name: String) = {
         println(s"$name => $value")
@@ -636,7 +608,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
       }
     }
 
-    "row 1" in {
+    "be allocated to correct tax bands" in {
       val inputs = Table(
         ("TotalProfitFromSelfEmployments", "TotalSavingsIncome", "StartingRateAmount", "NilRateAmount", "BasicRateTaxAmount", "HigherRateTaxAmount", "AdditionalHigherRateAmount"),
         ("8000", "12000", "5000", "1000", "3000", "0", "0"),  //0
@@ -647,18 +619,20 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
         ("100000", "12000", "0", "500", "0", "11500", "0"),   //5
         ("140000", "12000", "0", "0", "0", "10000", "2000"),  //6
         ("150000", "12000", "0", "0", "0", "0", "12000"),     //7
-        ("60000", "85000", "0", "500", "0", "84500", "0")    //8
-        //("80000", "85000", "0", "0", "0", "70000", "15000")   //9
+        ("60000", "85000", "0", "500", "0", "84500", "0"),    //8
+        ("80000", "85000", "0", "0", "0", "70000", "15000")   //9
       )
 
       TableDrivenPropertyChecks.forAll(inputs) { (totalProfitFromSelfEmployments: String, totalSavingsIncome: String, startingRateAmount: String,
                                                   nilRateAmount: String, basicRateTaxAmount: String, higherRateTaxAmount: String, additionalHigherRateAmount: String) =>
 
-        val personalAllowance = Print(PersonalAllowance(totalProfitFromSelfEmployments.toInt)).as("PersonalAllowance")
+        val totalIncomeReceived = TotalIncomeReceived(totalProfitFromSelfEmployments = BigDecimal(totalProfitFromSelfEmployments.toInt),
+          totalSavings = BigDecimal(totalSavingsIncome.toInt), totalDividends = 0)
+        val personalAllowance = Print(PersonalAllowance(totalIncomeReceived)).as("PersonalAllowance")
         val totalDeduction = Print(TotalDeduction(incomeTaxRelief = 0, personalAllowance = personalAllowance)).as("TotalDeductions")
         val savingStartingRate = Print(StartingSavingsRate(profitFromSelfEmployments = totalProfitFromSelfEmployments.toInt,
           totalDeduction = totalDeduction)).as("StartingSavingRate")
-        val totalTaxableIncome = Print(TotalTaxableIncome(totalIncomeReceived = BigDecimal(totalProfitFromSelfEmployments.toInt + totalSavingsIncome.toInt),
+        val totalTaxableIncome = Print(TotalTaxableIncome(totalIncomeReceived = totalIncomeReceived,
           totalDeduction = totalDeduction)).as("TotalTaxableIncome")
         val personalSavingsAllowance = Print(PersonalSavingsAllowance(totalTaxableIncome = totalTaxableIncome)).as("PersonalSavingsAllowance")
         val taxableSavingsIncome = Print(TaxableSavingsIncome(totalSavingsIncome = totalSavingsIncome.toInt, totalDeduction = totalDeduction,

@@ -201,10 +201,9 @@ object PersonalAllowance {
   private val standardAllowance = BigDecimal(11000)
   private val taperingThreshold = BigDecimal(100000)
 
-  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalTaxableProfitFromSelfEmployment(selfAssessment))
+  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalIncomeReceived(selfAssessment))
 
-  def apply(totalTaxableProfitFromSelfEmployments: BigDecimal): BigDecimal = totalTaxableProfitFromSelfEmployments - totalTaxableProfitFromSelfEmployments % 2
-  match {
+  def apply(totalIncomeReceived: BigDecimal): BigDecimal = totalIncomeReceived - totalIncomeReceived % 2 match {
     case income if income <= taperingThreshold => standardAllowance
     case income if income > taperingThreshold => PositiveOrZero(standardAllowance - ((income - taperingThreshold) / 2))
   }
