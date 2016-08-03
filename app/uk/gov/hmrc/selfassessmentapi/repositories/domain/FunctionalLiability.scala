@@ -25,65 +25,71 @@ import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigh
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{CapAt, _}
 
+object LesserOf {
+  def apply(one: BigDecimal, two: BigDecimal) = if(one <= two) one else two
+}
+
+object GreaterOf {
+  def apply(one: BigDecimal, two: BigDecimal) = if(one >= two) one else two
+}
+
 object TaxableSavingsIncome {
-  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalSavingsIncome(selfAssessment), TotalDeduction(selfAssessment), TotalProfitFromSelfEmployments(selfAssessment))
+  def apply(selfAssessment: SelfAssessment): BigDecimal = apply(TotalSavingsIncome(selfAssessment), TotalDeduction(selfAssessment),
+    TotalProfitFromSelfEmployments(selfAssessment))
   def apply(totalSavingsIncome: BigDecimal, totalDeduction: BigDecimal, totalProfitFromSelfEmployments: BigDecimal): BigDecimal = {
     PositiveOrZero(totalSavingsIncome - PositiveOrZero(totalDeduction - totalProfitFromSelfEmployments))
   }
 }
 
 object SavingsIncomeTax {
+  case class SavingsStartingTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound: Option[BigDecimal] = Some(lowerBound - 1 + startingSavingsRate)
+    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + 1
+    override def toString = s"SavingsStartingTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class NilTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound: Option[BigDecimal] = Some(lowerBound - 1 + personalSavingsAllowance)
+    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + 1
+    override def toString = s"NilTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class BasicTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.BasicTaxBand.upperBound
+    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1
+    override def toString = s"BasicTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class HigherTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.HigherTaxBand.upperBound
+    override lazy val lowerBound = GreaterOf(totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1, repositories.domain.TaxBand.HigherTaxBand.lowerBound)
+    override def toString = s"HigherTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class AdditionalHigherTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.AdditionalHigherTaxBand.upperBound
+    override lazy val lowerBound = GreaterOf(totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1, repositories.domain.TaxBand.AdditionalHigherTaxBand.lowerBound)
+    override def toString = s"AdditionalHigherTaxBand($lowerBound:${upperBound.get})"
+  }
+
   def apply(selfAssessment: SelfAssessment): Seq[TaxBandAllocation] = apply(TaxableSavingsIncome(selfAssessment),
     StartingSavingsRate(selfAssessment), PersonalSavingsAllowance(selfAssessment), TotalTaxableIncome(selfAssessment))
 
-  def netTaxableSavingsIncome(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal): BigDecimal = {
-    PositiveOrZero(taxableSavingsIncome - (startingSavingsRate + personalSavingsAllowance))
-  }
-
-  object SavingIncomeRange {
-    def apply(netTaxableSavingsIncome: BigDecimal, totalTaxableIncome: BigDecimal) = (totalTaxableIncome - netTaxableSavingsIncome, totalTaxableIncome)
-  }
+  def taxBandAmount(taxableIncome: BigDecimal, taxBand: TaxBand) = CapAt(PositiveOrZero(taxableIncome - (taxBand.lowerBound - 1)), PositiveOrZero(taxBand.width))
 
   def apply(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal, totalTaxableIncome: BigDecimal): Seq[TaxBandAllocation] = {
-    BandDistribution(SavingIncomeRange(netTaxableSavingsIncome(taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance), totalTaxableIncome)) match {
-      case (basicRateBandAmount, higherRateBandAmount, additionalHigherRateBandAmount) =>
-        Seq(
-          TaxBandAllocation(if(taxableSavingsIncome == 0) 0 else startingSavingsRate, SavingsStartingTaxBand),
-          TaxBandAllocation(personalSavingsAllowance, NilTaxBand),
-          TaxBandAllocation(basicRateBandAmount, BasicTaxBand),
-          TaxBandAllocation(higherRateBandAmount, HigherTaxBand),
-          TaxBandAllocation(additionalHigherRateBandAmount, AdditionalHigherTaxBand))
+    Seq(SavingsStartingTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate),
+      NilTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
+      BasicTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
+      HigherTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
+      AdditionalHigherTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance)).map { taxBand =>
+        TaxBandAllocation(taxBandAmount(totalTaxableIncome, taxBand), taxBand)
     }
-  }
-
-  object BandDistribution {
-    def allocatedToAdditionalHigherRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal): BigDecimal = {
-      savingsIncomeStart match {
-        case start if start >= HigherTaxBand.upperBound.get => savingsIncomeEnd - savingsIncomeStart
-        case _ => PositiveOrZero(savingsIncomeEnd - HigherTaxBand.upperBound.get)
-      }
-    }
-
-    def allocatedToHigherRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal) =
-      (savingsIncomeEnd - savingsIncomeStart) - (allocatedToBasicRateBand(savingsIncomeStart, savingsIncomeEnd)
-        + allocatedToAdditionalHigherRateBand(savingsIncomeStart, savingsIncomeEnd))
-
-    def allocatedToBasicRateBand(savingsIncomeStart: BigDecimal, savingsIncomeEnd: BigDecimal): BigDecimal = {
-      savingsIncomeEnd match {
-        case end if end <= BasicTaxBand.upperBound.get => savingsIncomeEnd - savingsIncomeStart
-        case _ => PositiveOrZero(BasicTaxBand.upperBound.get - savingsIncomeStart)
-      }
-    }
-
-    def apply(tuple: (BigDecimal, BigDecimal)) = {
-      tuple match {
-        case (savingsIncomeStart, savingsIncomeEnd) =>
-          println(s"start:$savingsIncomeStart -> end:$savingsIncomeEnd")
-          (allocatedToBasicRateBand(savingsIncomeStart, savingsIncomeEnd), allocatedToHigherRateBand(savingsIncomeStart, savingsIncomeEnd),
-            allocatedToAdditionalHigherRateBand(savingsIncomeStart, savingsIncomeEnd))
-      }
-    }
-
   }
 
 }
@@ -120,10 +126,7 @@ object PayPensionProfitsTax {
 
   def apply(totalProfitFromSelfEmployments: BigDecimal, totalDeduction: BigDecimal): Seq[TaxBandAllocation] = {
     val netTaxableProfit = PositiveOrZero(totalProfitFromSelfEmployments - totalDeduction)
-    Seq(TaxBandAllocation(taxBandAmount(netTaxableProfit, BasicTaxBand), BasicTaxBand),
-      TaxBandAllocation(taxBandAmount(netTaxableProfit, HigherTaxBand), HigherTaxBand),
-      TaxBandAllocation(taxBandAmount(netTaxableProfit, AdditionalHigherTaxBand), AdditionalHigherTaxBand)
-    )
+    Seq(BasicTaxBand, HigherTaxBand, AdditionalHigherTaxBand).map(taxBand => TaxBandAllocation(taxBandAmount(netTaxableProfit, taxBand), taxBand))
   }
 
 }

@@ -19,7 +19,7 @@ package uk.gov.hmrc.selfassessmentapi.repositories.domain
 import play.api.libs.json._
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.Math
 
-sealed trait TaxBand extends Math {
+trait TaxBand extends Math {
   def name: String
   def lowerBound: BigDecimal
   def upperBound: Option[BigDecimal]
@@ -57,7 +57,7 @@ object TaxBand {
   case object AdditionalHigherTaxBand extends TaxBand {
     val name = "additionalHigherRate"
     val lowerBound = BigDecimal(150001)
-    val upperBound = None
+    val upperBound = Some(BigDecimal(Integer.MAX_VALUE))
   }
 
   case object SavingsStartingTaxBand extends TaxBand { 

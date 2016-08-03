@@ -613,14 +613,20 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
         ("TotalProfitFromSelfEmployments", "TotalSavingsIncome", "StartingRateAmount", "NilRateAmount", "BasicRateTaxAmount", "HigherRateTaxAmount", "AdditionalHigherRateAmount"),
         ("8000", "12000", "5000", "1000", "3000", "0", "0"),  //0
         ("5000", "6000", "0", "0", "0", "0", "0"),            //1
-        ("20000", "11000", "0", "1000", "10000", "0", "0"),   //2
-        ("29000", "12000", "0", "1000", "11000", "0", "0"),   //3
-        ("32000", "12000", "0", "500", "10500", "1000", "0"), //4
-        ("100000", "12000", "0", "500", "0", "11500", "0"),   //5
-        ("140000", "12000", "0", "0", "0", "10000", "2000"),  //6
-        ("150000", "12000", "0", "0", "0", "0", "12000"),     //7
-        ("60000", "85000", "0", "500", "0", "84500", "0"),    //8
-        ("80000", "85000", "0", "0", "0", "70000", "15000")   //9
+        ("5000", "7000", "1000", "0", "0", "0", "0"),         //2
+        ("5000", "11000", "5000", "0", "0", "0", "0"),        //3
+        ("5000", "12000", "5000", "1000", "0", "0", "0"),        //3
+        ("20000", "11000", "0", "1000", "10000", "0", "0"),   //4
+        ("29000", "12000", "0", "1000", "11000", "0", "0"),   //5
+        ("32000", "12000", "0", "500", "10500", "1000", "0"), //6
+        ("100000", "12000", "0", "500", "0", "11500", "0"),   //7
+        ("140000", "12000", "0", "0", "0", "10000", "2000"),  //8
+        ("150000", "12000", "0", "0", "0", "0", "12000"),     //9
+        ("60000", "85000", "0", "500", "0", "84500", "0"),    //10
+        ("80000", "85000", "0", "0", "0", "70000", "15000"),
+        ("13000", "7000", "3000", "1000", "3000", "0", "0"),
+        ("14000", "8000", "2000", "1000", "5000", "0", "0")
+
       )
 
       TableDrivenPropertyChecks.forAll(inputs) { (totalProfitFromSelfEmployments: String, totalSavingsIncome: String, startingRateAmount: String,
@@ -637,15 +643,21 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
         val personalSavingsAllowance = Print(PersonalSavingsAllowance(totalTaxableIncome = totalTaxableIncome)).as("PersonalSavingsAllowance")
         val taxableSavingsIncome = Print(TaxableSavingsIncome(totalSavingsIncome = totalSavingsIncome.toInt, totalDeduction = totalDeduction,
           totalProfitFromSelfEmployments = totalProfitFromSelfEmployments.toInt)).as("TaxableSavingsIncome")
+
+
+        val bandAllocations = SavingsIncomeTax(taxableSavingsIncome = taxableSavingsIncome, startingSavingsRate =
+          savingStartingRate,
+          personalSavingsAllowance = personalSavingsAllowance, totalTaxableIncome = totalTaxableIncome)
+
+        println(bandAllocations)
         println("==========================================")
 
-        SavingsIncomeTax(taxableSavingsIncome = taxableSavingsIncome, startingSavingsRate = savingStartingRate,
-          personalSavingsAllowance = personalSavingsAllowance, totalTaxableIncome = totalTaxableIncome) shouldBe Seq(
-          TaxBandAllocation(startingRateAmount.toInt, SavingsStartingTaxBand),
-          TaxBandAllocation(nilRateAmount.toInt, NilTaxBand),
-          TaxBandAllocation(basicRateTaxAmount.toInt, BasicTaxBand),
-          TaxBandAllocation(higherRateTaxAmount.toInt, HigherTaxBand),
-          TaxBandAllocation(additionalHigherRateAmount.toInt , AdditionalHigherTaxBand))
+        bandAllocations.map(_.amount) shouldBe
+            Seq(startingRateAmount.toInt,
+              nilRateAmount.toInt,
+              basicRateTaxAmount.toInt,
+              higherRateTaxAmount.toInt,
+              additionalHigherRateAmount.toInt)
 
       }
 
