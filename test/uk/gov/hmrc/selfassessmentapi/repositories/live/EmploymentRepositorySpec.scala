@@ -22,18 +22,22 @@ import org.scalatest.BeforeAndAfterEach
 import reactivemongo.bson.BSONObjectID
 import uk.gov.hmrc.domain.SaUtr
 import uk.gov.hmrc.selfassessmentapi.MongoEmbeddedDatabase
-import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.{Dividend, SavingsIncome, UnearnedIncome}
-import uk.gov.hmrc.selfassessmentapi.domain.{JsonMarshaller, TaxYear}
+import uk.gov.hmrc.selfassessmentapi.domain.JsonMarshaller
+import uk.gov.hmrc.selfassessmentapi.domain.employment._
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoEmployment, MongoEmploymentIncomeSummary}
 import uk.gov.hmrc.selfassessmentapi.repositories.{SourceRepository, SummaryRepository}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndAfterEach {
+class EmploymentRepositorySpec extends MongoEmbeddedDatabase with BeforeAndAfterEach {
 
-  private val mongoRepository = new UnearnedIncomeMongoRepository
-  private val unearnedIncomeMongoRepository: SourceRepository[UnearnedIncome] = mongoRepository
-  private val summariesMap: Map[JsonMarshaller[_], SummaryRepository[_]] = Map(Dividend -> mongoRepository.DividendRepository, SavingsIncome -> mongoRepository.SavingsIncomeRepository)
-
+  private val mongoRepository = new EmploymentMongoRepository
+  private val employmentRepository: SourceRepository[Employment] = mongoRepository
+  private val summariesMap: Map[JsonMarshaller[_], SummaryRepository[_]] = Map(
+      Income -> mongoRepository.IncomeRepository,
+      Expense -> mongoRepository.ExpenseRepository,
+      Benefit -> mongoRepository.BenefitRepository,
+      UkTaxPaid -> mongoRepository.UkTaxPaidRepository)
 
   override def beforeEach() {
     await(mongoRepository.drop)
@@ -42,91 +46,99 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
   val saUtr = generateSaUtr()
 
-  def unearnedIncome(): UnearnedIncome = UnearnedIncome.example()
+  def employment(): Employment = Employment.example()
 
   "delete by Id" should {
-    "return true when unearned income is deleted" in {
-      val source = unearnedIncome()
-      val id = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, source))
-      val result = await(unearnedIncomeMongoRepository.delete(saUtr, taxYear, id))
+    "return true when employment is deleted" in {
+      val source = employment()
+      val id = await(employmentRepository.create(saUtr, taxYear, source))
+      val result = await(employmentRepository.delete(saUtr, taxYear, id))
 
       result shouldBe true
     }
 
-    "return false when unearned is not deleted" in {
-      val source = unearnedIncome()
-      val id = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, source))
-      val result = await(unearnedIncomeMongoRepository.delete(generateSaUtr(), taxYear, id))
+    "return false when employment is not deleted" in {
+      val source = employment()
+      val id = await(employmentRepository.create(saUtr, taxYear, source))
+      val result = await(employmentRepository.delete(generateSaUtr(), taxYear, id))
 
       result shouldBe false
     }
   }
 
   "delete by utr and taxYear" should {
-    "delete  all unearned incomes for utr/tax year" in {
+    "delete  all employments for utr/tax year" in {
       for {
         n <- 1 to 10
-        source = unearnedIncome()
-        id = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, source))
+        source = employment()
+        id = await(employmentRepository.create(saUtr, taxYear, source))
       } yield source.copy(id = Some(id))
 
+      await(employmentRepository.delete(saUtr, taxYear))
 
-      await(unearnedIncomeMongoRepository.delete(saUtr, taxYear))
-
-      val found: Seq[_] = await(unearnedIncomeMongoRepository.list(saUtr, taxYear))
+      val found: Seq[Employment] = await(employmentRepository.list(saUtr, taxYear))
 
       found shouldBe empty
     }
 
-    "not delete unearned incomes for different utr" in {
+    "not delete employments for different utr" in {
       val saUtr2: SaUtr = generateSaUtr()
-      await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
-      val source2 = await(unearnedIncomeMongoRepository.create(saUtr2, taxYear, unearnedIncome()))
+      await(employmentRepository.create(saUtr, taxYear, employment()))
+      val source2 = await(employmentRepository.create(saUtr2, taxYear, employment()))
 
-      await(unearnedIncomeMongoRepository.delete(saUtr, taxYear))
-      val found: Seq[UnearnedIncome] = await(unearnedIncomeMongoRepository.list(saUtr2, taxYear))
+      await(employmentRepository.delete(saUtr, taxYear))
+      val found: Seq[Employment] = await(employmentRepository.list(saUtr2, taxYear))
 
       found.flatMap(_.id) should contain theSameElementsAs Seq(source2)
     }
   }
 
-
   "list" should {
-    "retrieve all unearned incomes for utr/tax year" in {
+    "retrieve all employments for utr/tax year" in {
       val sources = for {
         n <- 1 to 10
-        source = unearnedIncome()
-        id = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, source))
+        source = employment()
+        id = await(employmentRepository.create(saUtr, taxYear, source))
       } yield source.copy(id = Some(id))
 
-
-      val found: Seq[_] = await(unearnedIncomeMongoRepository.list(saUtr, taxYear))
+      val found: Seq[Employment] = await(employmentRepository.list(saUtr, taxYear))
 
       found should contain theSameElementsAs sources
     }
 
-    "not include unearned incomes for different utr" in {
-      val source1 = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
-      await(unearnedIncomeMongoRepository.create(generateSaUtr(), taxYear, unearnedIncome()))
+    "not include employments for different utr" in {
+      val source1 = await(employmentRepository.create(saUtr, taxYear, employment()))
+      await(employmentRepository.create(generateSaUtr(), taxYear, employment()))
 
-      val found: Seq[UnearnedIncome] = await(unearnedIncomeMongoRepository.list(saUtr, taxYear))
+      val found: Seq[Employment] = await(employmentRepository.list(saUtr, taxYear))
 
       found.flatMap(_.id) should contain theSameElementsAs Seq(source1)
     }
   }
 
-  "update" should {
-
-    "return false when the unearned income does not exist" in {
-      val result = await(unearnedIncomeMongoRepository.update(saUtr, taxYear, UUID.randomUUID().toString, unearnedIncome()))
+    "return false when the employment does not exist" in {
+      val result = await(employmentRepository.update(saUtr, taxYear, UUID.randomUUID().toString, employment()))
       result shouldEqual false
     }
 
+  "update" should {
+
+    "not remove incomes" in {
+      val source = MongoEmployment.create(saUtr, taxYear, employment()).copy(incomes = Seq(MongoEmploymentIncomeSummary(BSONObjectID.generate.stringify, IncomeType.Salary, 1000)))
+      await(mongoRepository.insert(source))
+      val found = await(mongoRepository.findById(saUtr, taxYear, source.sourceId)).get
+      await(employmentRepository.update(saUtr, taxYear, source.sourceId, found))
+
+      val found1 = await(mongoRepository.findById(source.id))
+
+      found1.get.incomes should not be empty
+    }
+
     "update last modified" in {
-      val source = unearnedIncome()
-      val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, source))
+      val source = employment()
+      val sourceId = await(employmentRepository.create(saUtr, taxYear, source))
       val found = await(mongoRepository.findById(BSONObjectID(sourceId)))
-      await(unearnedIncomeMongoRepository.update(saUtr, taxYear, sourceId, source))
+      await(employmentRepository.update(saUtr, taxYear, sourceId, source))
 
       val found1 = await(mongoRepository.findById(BSONObjectID(sourceId)))
 
@@ -140,7 +152,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
   "create summary" should {
     "add a summary to an empty list when source exists and return id" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary)))
 
@@ -154,7 +166,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
     "add a summary to the existing list when source exists and return id" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summary1 = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary)))
@@ -163,7 +175,8 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
         val summaries = await(repo.list(saUtr, taxYear, sourceId))
 
         val found = summaries.get
-        found should contain theSameElementsAs Seq(summaryItem.example(id = summaryId), summaryItem.example(id = summaryId1))
+        found should contain theSameElementsAs Seq(summaryItem.example(id = summaryId),
+                                                   summaryItem.example(id = summaryId1))
       }
     }
 
@@ -185,14 +198,14 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
     "return none if the summary does not exist" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         await(repo.findById(saUtr, taxYear, sourceId, BSONObjectID.generate.stringify)) shouldEqual None
       }
     }
 
     "return the summary if found" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary))).get
         val found = await(repo.findById(saUtr, taxYear, sourceId, summaryId))
@@ -205,7 +218,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
   "list summaries" should {
     "return empty list when source has no summaries" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         await(repo.list(saUtr, taxYear, sourceId)) shouldEqual Some(Seq.empty)
       }
     }
@@ -220,7 +233,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
   "delete summary" should {
     "return true when the summary has been deleted" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary))).get
         await(repo.delete(saUtr, taxYear, sourceId, summaryId)) shouldEqual true
@@ -229,7 +242,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
     "only delete the specified summary" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary))).get
         val summaryId1 = await(repo.create(saUtr, taxYear, sourceId, cast(summary)))
@@ -249,7 +262,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
     "return false when the summary does not exist" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         await(repo.delete(saUtr, taxYear, sourceId, BSONObjectID.generate.stringify)) shouldEqual false
       }
     }
@@ -258,7 +271,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
   "update income" should {
     "return true when the income has been updated" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary = summaryItem.example()
         val summaryId = await(repo.create(saUtr, taxYear, sourceId, cast(summary))).get
 
@@ -273,7 +286,7 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
     "only update the specified income" in {
       for ((summaryItem, repo) <- summariesMap) {
-        val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+        val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
         val summary1 = summaryItem.example()
         val summaryId1 = await(repo.create(saUtr, taxYear, sourceId, cast(summary1))).get
         val summary2 = summaryItem.example()
@@ -284,23 +297,28 @@ class UnearnedIncomeRepositorySpec extends MongoEmbeddedDatabase with BeforeAndA
 
         val found = await(repo.list(saUtr, taxYear, sourceId)).get
 
-        found should contain theSameElementsAs Seq(summaryItem.example(id = Some(summaryId1)), summaryItem.example(id = Some(summaryId2)))
+        found should contain theSameElementsAs Seq(summaryItem.example(id = Some(summaryId1)),
+                                                   summaryItem.example(id = Some(summaryId2)))
       }
     }
 
     "return false when the source does not exist" in {
       for ((summaryItem, repo) <- summariesMap) {
-        await(repo.update(saUtr, taxYear, BSONObjectID.generate.stringify, BSONObjectID.generate.stringify, cast(summaryItem.example()))) shouldEqual false
+        await(
+            repo.update(saUtr,
+                        taxYear,
+                        BSONObjectID.generate.stringify,
+                        BSONObjectID.generate.stringify,
+                        cast(summaryItem.example()))) shouldEqual false
       }
     }
 
     "return false when the income does not exist" in {
-      val sourceId = await(unearnedIncomeMongoRepository.create(saUtr, taxYear, unearnedIncome()))
+      val sourceId = await(employmentRepository.create(saUtr, taxYear, employment()))
       for ((summaryItem, repo) <- summariesMap) {
         await(repo.update(saUtr, taxYear, sourceId, BSONObjectID.generate.stringify, cast(summaryItem.example()))) shouldEqual false
       }
     }
   }
-
 
 }

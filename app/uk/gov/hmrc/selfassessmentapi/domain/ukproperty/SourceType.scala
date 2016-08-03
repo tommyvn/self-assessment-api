@@ -25,21 +25,35 @@ object SourceType {
 
   case object UKProperties extends SourceType {
     override val name = "uk-properties"
+
     override def example(sourceId: Option[SourceId] = None): JsValue = toJson(UKProperty.example(sourceId))
-    override val summaryTypes : Set[SummaryType] = Set(Incomes, Expenses, TaxesPaid, BalancingCharges, PrivateUseAdjustments)
+
+    override val summaryTypes: Set[SummaryType] = Set(Incomes, Expenses, TaxesPaid, BalancingCharges, PrivateUseAdjustments)
     override val title = "Sample UK property"
 
     override def description(action: String) = s"$action a UK property"
 
     override val fieldDescriptions = Seq(
       FullFieldDescription(name, "allowances", "Object", "", "Allowances claimed for this property", optional = true),
-      PositiveMonetaryFieldDescription(name, "annualInvestmentAllowance", optional = true),
-      PositiveMonetaryFieldDescription(name, "businessPremisesRenovationAllowance", optional = true),
-      PositiveMonetaryFieldDescription(name, "otherCapitalAllowance", optional = true),
-      PositiveMonetaryFieldDescription(name, "wearAndTearAllowance", optional = true),
+      PositiveMonetaryFieldDescription(name, "annualInvestmentAllowance",
+        """Annual Investment Allowance can be claimed if equipment was purchased (but not cars) during the year.
+          |AIA can be claimed up to a maximum annual amount.
+          |AIA can’t be claimed for expenditure on equipment and other items for use in a dwelling house""".stripMargin, optional = true),
+      PositiveMonetaryFieldDescription(name, "businessPremisesRenovationAllowance",
+        "When eligible, BPRA can be claimed for the cost of renovating or repairing business premises", optional = true),
+      PositiveMonetaryFieldDescription(name, "otherCapitalAllowance",
+        "The type of capital allowance and amount that can be claimed will depend on the cost, type of asset and other circumstances", optional = true),
+      PositiveMonetaryFieldDescription(name, "wearAndTearAllowance",
+        """For fully furnished accommodation, wear & tear allowance can be claimed up to 10%
+          | of the net rents (including chargeable premiums & reverse premiums) after deducting charges or services that a
+          | tenant would usually pay for but which are paid by you (such as Council Tax)""".stripMargin, optional = true),
       FullFieldDescription(name, "adjustments", "Object", "", "Adjustments for this property", optional = true),
-      PositiveMonetaryFieldDescription(name, "lossBroughtForward"),
-      PositiveMonetaryFieldDescription(name, "rentARoomRelief", optional = true)
+      PositiveMonetaryFieldDescription(name, "lossBroughtForward",
+        """If a loss was made in the previous or earlier tax years,
+          |this can be used against the profits from this tax year""".stripMargin),
+      PositiveMonetaryFieldDescription(name, "rentARoomRelief",
+        """For claiming the exempt amount (either £4,250 or £2,125, if let jointly)
+          | if any Rent a Room income has been included within Rental Income""".stripMargin, optional = true)
     )
   }
 
