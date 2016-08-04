@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-package uk.gov.hmrc.selfassessmentapi.repositories.domain.functional
+package uk.gov.hmrc.selfassessmentapi.repositories.domain
 
 import org.scalacheck.Gen
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.prop.Tables.Table
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment._
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand, NilTaxBand, SavingsStartingTaxBand}
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.{TaxableSavingsIncome, _}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigherTaxBand, BasicTaxBand, HigherTaxBand}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec, domain}
 
@@ -53,7 +52,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(2430)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(2430)
 
     }
 
@@ -69,7 +68,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(5000)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(5000)
 
     }
 
@@ -88,7 +87,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           )
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1800)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(1800)
     }
 
     "subtract all allowances from profit" in {
@@ -109,7 +108,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1900)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(1900)
 
     }
 
@@ -125,7 +124,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(1)
     }
 
     "subtract adjustments from profit" in {
@@ -143,7 +142,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(1900)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(1900)
 
     }
 
@@ -159,7 +158,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(30000)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(30000)
 
     }
 
@@ -175,7 +174,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(999)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(999)
     }
 
     "return zero as taxable profit if lossBroughtForward is greater than adjusted profit" in {
@@ -190,7 +189,7 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(0)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(0)
 
     }
 
@@ -209,14 +208,14 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
           ))
         )
 
-      TaxableProfitFromSelfEmployment(selfEmployment) shouldBe BigDecimal(0)
+      ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment) shouldBe BigDecimal(0)
     }
 
   }
 
   "Profit from Self employments" should {
     "be equal to the sum of taxableProfit and lossBroughtForward" in {
-      ProfitFromSelfEmployment(taxableProfit = 100, lossBroughtForward = 200) shouldBe 300
+      ProfitFromSelfEmployment(adjustedProfits = 100, outstandingBusinessIncome = 200) shouldBe 300
     }
   }
 
@@ -460,74 +459,61 @@ class FunctionalLiabilitySpec extends UnitSpec with SelfEmploymentSugar {
   "run with no deductions" should {
 
     "calculate tax for total pay pension and profit received lesser than 32000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments =  31999, totalDeduction = 0) should contain theSameElementsAs Seq(TaxBandAllocation(31999, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments =  31999, totalDeduction = 0).map(_.amount) should contain theSameElementsAs
+        Seq(31999, 0,0)
     }
 
     "calculate tax for total pay pension and profit received equal to 32000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 32000, totalDeduction = 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 32000, totalDeduction = 0).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 0,0)
     }
 
     "calculate tax for total pay pension and profit received greater than 32000 but lesser than 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 60000, totalDeduction = 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(28000, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
-
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 60000, totalDeduction = 0).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 28000, 0)
     }
 
     "calculate tax for total pay pension and profit received equal to 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 150000, totalDeduction = 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(118000, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
-
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 150000, totalDeduction = 0).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 118000, 0)
     }
 
     "calculate tax for total pay pension and profit received  greater than 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 300000, totalDeduction = 0) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(118000, HigherTaxBand),
-        TaxBandAllocation(150000, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 300000, totalDeduction = 0).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 118000, 150000)
     }
   }
 
   "run with deductions" should {
 
     "calculate tax for total pay pension and profit received lesser than 32000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 33999, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(31999, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 33999, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(31999, 0, 0)
     }
 
     "calculate tax for total pay pension and profit received equal to 32000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 34000, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 34000, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 0, 0)
     }
 
     "calculate tax for total pay pension and profit received greater than 32000 but lesser than 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 62000, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(28000, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 62000, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 28000, 0)
     }
 
     "calculate tax for total pay pension and profit received equal to 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 152000, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(118000, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 152000, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 118000, 0)
     }
 
     "calculate tax for total pay pension and profit received  greater than 150000" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 302000, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(32000, BasicTaxBand),
-        TaxBandAllocation(118000, HigherTaxBand),
-        TaxBandAllocation(150000, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 302000, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(32000, 118000, 150000)
     }
 
     "calculate tax for total pay pension and profit received lesser than deductions" in {
-      PayPensionProfitsTax(totalProfitFromSelfEmployments = 1500, totalDeduction = 2000) should contain theSameElementsAs Seq(TaxBandAllocation(0, BasicTaxBand),
-        TaxBandAllocation(0, HigherTaxBand),
-        TaxBandAllocation(0, AdditionalHigherTaxBand))
+      PayPensionProfitsTax(totalProfitFromSelfEmployments = 1500, totalDeduction = 2000).map(_.amount) should contain theSameElementsInOrderAs
+        Seq(0, 0, 0)
     }
 
   }

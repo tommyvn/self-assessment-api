@@ -57,7 +57,7 @@ object TaxBand {
   case object AdditionalHigherTaxBand extends TaxBand {
     val name = "additionalHigherRate"
     val lowerBound = BigDecimal(150001)
-    val upperBound = Some(BigDecimal(Integer.MAX_VALUE))
+    val upperBound = None
   }
 
   case object SavingsStartingTaxBand extends TaxBand { 

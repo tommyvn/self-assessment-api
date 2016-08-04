@@ -25,8 +25,44 @@ import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{AdditionalHigh
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{CapAt, _}
 
-object LesserOf {
-  def apply(one: BigDecimal, two: BigDecimal) = if(one <= two) one else two
+trait IncomeTax {
+
+  def taxBandAmount(taxableIncome: BigDecimal, taxBand: TaxBand) = CapAt(PositiveOrZero(taxableIncome - (taxBand.lowerBound - 1)), PositiveOrZero(taxBand.width))
+
+  case class SavingsStartingTaxBand(computedLowerBound: BigDecimal, bandWidth: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound = Some(lowerBound - 1 + bandWidth)
+    override lazy val lowerBound = computedLowerBound + 1
+    override def toString = s"SavingsStartingTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class NilTaxBand(computedLowerBound: BigDecimal, bandWidth: BigDecimal) extends TaxBand {
+    override def name: String = ""
+    override val upperBound = Some(lowerBound - 1 + bandWidth)
+    override lazy val lowerBound = computedLowerBound + 1
+    override def toString = s"NilTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class BasicTaxBand(computedLowerBound: BigDecimal = 0) extends TaxBand {
+    override def name: String = ""
+    override val upperBound = Some(BigDecimal(32000))
+    override lazy val lowerBound = computedLowerBound + 1
+    override def toString = s"BasicTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class HigherTaxBand(computedLowerBound: BigDecimal = 32000) extends TaxBand {
+    override def name: String = ""
+    override val upperBound = Some(BigDecimal(150000))
+    override lazy val lowerBound = GreaterOf(computedLowerBound + 1, BigDecimal(32001))
+    override def toString = s"HigherTaxBand($lowerBound:${upperBound.get})"
+  }
+
+  case class AdditionalHigherTaxBand(computedLowerBound: BigDecimal = 150000) extends TaxBand {
+    override def name: String = ""
+    override val upperBound = Some(BigDecimal(Integer.MAX_VALUE))
+    override lazy val lowerBound = GreaterOf(computedLowerBound + 1, BigDecimal(150001))
+    override def toString = s"AdditionalHigherTaxBand($lowerBound:${upperBound.get})"
+  }
 }
 
 object GreaterOf {
@@ -41,57 +77,22 @@ object TaxableSavingsIncome {
   }
 }
 
-object SavingsIncomeTax {
-  case class SavingsStartingTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal) extends TaxBand {
-    override def name: String = ""
-    override val upperBound: Option[BigDecimal] = Some(lowerBound - 1 + startingSavingsRate)
-    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + 1
-    override def toString = s"SavingsStartingTaxBand($lowerBound:${upperBound.get})"
-  }
-
-  case class NilTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
-    override def name: String = ""
-    override val upperBound: Option[BigDecimal] = Some(lowerBound - 1 + personalSavingsAllowance)
-    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + 1
-    override def toString = s"NilTaxBand($lowerBound:${upperBound.get})"
-  }
-
-  case class BasicTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
-    override def name: String = ""
-    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.BasicTaxBand.upperBound
-    override lazy val lowerBound = totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1
-    override def toString = s"BasicTaxBand($lowerBound:${upperBound.get})"
-  }
-
-  case class HigherTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
-    override def name: String = ""
-    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.HigherTaxBand.upperBound
-    override lazy val lowerBound = GreaterOf(totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1, repositories.domain.TaxBand.HigherTaxBand.lowerBound)
-    override def toString = s"HigherTaxBand($lowerBound:${upperBound.get})"
-  }
-
-  case class AdditionalHigherTaxBand(totalTaxableIncome: BigDecimal, taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal) extends TaxBand {
-    override def name: String = ""
-    override val upperBound: Option[BigDecimal] = repositories.domain.TaxBand.AdditionalHigherTaxBand.upperBound
-    override lazy val lowerBound = GreaterOf(totalTaxableIncome - taxableSavingsIncome + startingSavingsRate + personalSavingsAllowance + 1, repositories.domain.TaxBand.AdditionalHigherTaxBand.lowerBound)
-    override def toString = s"AdditionalHigherTaxBand($lowerBound:${upperBound.get})"
-  }
-
+object SavingsIncomeTax extends IncomeTax {
   def apply(selfAssessment: SelfAssessment): Seq[TaxBandAllocation] = apply(TaxableSavingsIncome(selfAssessment),
     StartingSavingsRate(selfAssessment), PersonalSavingsAllowance(selfAssessment), TotalTaxableIncome(selfAssessment))
 
-  def taxBandAmount(taxableIncome: BigDecimal, taxBand: TaxBand) = CapAt(PositiveOrZero(taxableIncome - (taxBand.lowerBound - 1)), PositiveOrZero(taxBand.width))
-
   def apply(taxableSavingsIncome: BigDecimal, startingSavingsRate: BigDecimal, personalSavingsAllowance: BigDecimal, totalTaxableIncome: BigDecimal): Seq[TaxBandAllocation] = {
-    Seq(SavingsStartingTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate),
-      NilTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
-      BasicTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
-      HigherTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance),
-      AdditionalHigherTaxBand(totalTaxableIncome, taxableSavingsIncome, startingSavingsRate, personalSavingsAllowance)).map { taxBand =>
+
+    val taxableIncomeWithoutSavings = PositiveOrZero(totalTaxableIncome - taxableSavingsIncome)
+
+    Seq(SavingsStartingTaxBand(taxableIncomeWithoutSavings, startingSavingsRate),
+      NilTaxBand(taxableIncomeWithoutSavings + startingSavingsRate, personalSavingsAllowance),
+      BasicTaxBand(taxableIncomeWithoutSavings + startingSavingsRate + personalSavingsAllowance),
+      HigherTaxBand(taxableIncomeWithoutSavings + startingSavingsRate + personalSavingsAllowance),
+      AdditionalHigherTaxBand(taxableIncomeWithoutSavings + startingSavingsRate + personalSavingsAllowance)).map { taxBand =>
         TaxBandAllocation(taxBandAmount(totalTaxableIncome, taxBand), taxBand)
     }
   }
-
 }
 
 object PersonalDividendAllowance {
@@ -121,12 +122,10 @@ object PersonalDividendAllowance {
   }
 
 }
-object PayPensionProfitsTax {
-  def taxBandAmount(netTaxableProfit: BigDecimal, taxBand: TaxBand) = CapAt(PositiveOrZero(netTaxableProfit - (taxBand.lowerBound - 1)), taxBand.width)
-
+object PayPensionProfitsTax extends IncomeTax {
   def apply(totalProfitFromSelfEmployments: BigDecimal, totalDeduction: BigDecimal): Seq[TaxBandAllocation] = {
     val netTaxableProfit = PositiveOrZero(totalProfitFromSelfEmployments - totalDeduction)
-    Seq(BasicTaxBand, HigherTaxBand, AdditionalHigherTaxBand).map(taxBand => TaxBandAllocation(taxBandAmount(netTaxableProfit, taxBand), taxBand))
+    Seq(BasicTaxBand(), HigherTaxBand(), AdditionalHigherTaxBand()).map(taxBand => TaxBandAllocation(taxBandAmount(netTaxableProfit, taxBand), taxBand))
   }
 
 }
@@ -212,8 +211,8 @@ object PersonalAllowance {
   }
 }
 
-object TotalTaxableProfitFromSelfEmployment {
-  def apply(selfAssessment: SelfAssessment) = selfAssessment.selfEmployments.map(TaxableProfitFromSelfEmployment(_)).sum
+object TotalProfitFromSelfEmploymentsWithoutLossBroughtForward {
+  def apply(selfAssessment: SelfAssessment) = selfAssessment.selfEmployments.map(ProfitFromSelfEmploymentWithoutLossBroughtForward(_)).sum
 }
 
 object TotalIncomeReceived {
@@ -248,17 +247,16 @@ object AdjustedProfits {
   }
 }
 
-object TaxableProfitFromSelfEmployment {
+object ProfitFromSelfEmploymentWithoutLossBroughtForward {
   def apply(selfEmployment: MongoSelfEmployment) = {
-    RoundDown(AdjustedProfits(selfEmployment) - LossBroughtForward(selfEmployment) + selfEmployment.outstandingBusinessIncome)
+    RoundDown(ProfitFromSelfEmployment(selfEmployment) - LossBroughtForward(selfEmployment))
   }
 }
 
 object ProfitFromSelfEmployment {
-  def apply(selfEmployment: MongoSelfEmployment): BigDecimal = apply(TaxableProfitFromSelfEmployment(selfEmployment), LossBroughtForward
-  (selfEmployment))
+  def apply(selfEmployment: MongoSelfEmployment): BigDecimal = apply(AdjustedProfits(selfEmployment), selfEmployment.outstandingBusinessIncome)
 
-  def apply(taxableProfit: BigDecimal, lossBroughtForward: BigDecimal): BigDecimal = RoundDown(taxableProfit + lossBroughtForward)
+  def apply(adjustedProfits: BigDecimal, outstandingBusinessIncome: BigDecimal): BigDecimal = RoundDown(adjustedProfits + outstandingBusinessIncome)
 }
 
 
@@ -272,7 +270,7 @@ object LossBroughtForward {
 
 object SelfEmploymentProfits {
   def apply(selfAssessment: SelfAssessment) = new SelfEmploymentProfits(selfAssessment.selfEmployments.map {
-    selfEmployment => SelfEmploymentProfit(selfEmployment.sourceId, RoundDown(TaxableProfitFromSelfEmployment(selfEmployment)),
+    selfEmployment => SelfEmploymentProfit(selfEmployment.sourceId, RoundDown(ProfitFromSelfEmploymentWithoutLossBroughtForward(selfEmployment)),
       RoundDown(ProfitFromSelfEmployment(selfEmployment)), LossBroughtForward(selfEmployment))
   })
 }
@@ -289,7 +287,7 @@ object FunctionalLiability {
   def apply(saUtr: SaUtr, taxYear: TaxYear, selfAssessment: SelfAssessment, createdDateTime: DateTime = DateTime.now()) =
     new FunctionalLiability(saUtr, taxYear, SelfEmploymentProfits(selfAssessment),
       TotalIncomeReceived(selfAssessment),
-      TotalTaxableProfitFromSelfEmployment(selfAssessment), PersonalAllowance(selfAssessment),
+      TotalProfitFromSelfEmploymentsWithoutLossBroughtForward(selfAssessment), PersonalAllowance(selfAssessment),
       totalAllowancesAndReliefs = TotalDeduction(selfAssessment),
       totalIncomeOnWhichTaxIsDue = TotalTaxableIncome(selfAssessment),
       interestFromUKBanksAndBuildingSocieties = InterestFromUKBanksAndBuildingSocieties(selfAssessment),
