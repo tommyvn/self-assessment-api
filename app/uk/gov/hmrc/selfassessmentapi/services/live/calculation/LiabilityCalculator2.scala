@@ -16,33 +16,55 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation
 
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
+import java.util.concurrent.Executors
+
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.{AllowancesAndReliefs, MongoLiability}
 import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2._
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 class LiabilityCalculator2 {
 
+  implicit val executionContext = ExecutionContext.fromExecutorService(Executors.newSingleThreadExecutor())
+
   def calculate(selfAssessment: SelfAssessment, liability: MongoLiability): Future[MongoLiability] = {
     for {
-      selfEmploymentIncomes <- SelfEmploymentProfitCalculation(selfAssessment)
-      interestFromBanks <- UnearnedInterestFromUKBanksAndBuildingSocietiesCalculation(selfAssessment)
-      dividends <- DividendsFromUKSourcesCalculation(selfAssessment)
-      (nonSavingsIncomeReceived, totalIncomeReceived, totalTaxableProfits) <- TotalIncomeCalculation(selfEmploymentIncomes, interestFromBanks, dividends)
+      selfEmploymentIncomes <- SelfEmploymentProfitCalculation(selfAssessment.selfEmployments)
+      interestFromBanks <- UnearnedInterestFromUKBanksAndBuildingSocietiesCalculation(selfAssessment.unearnedIncomes)
+      dividendsFromUKSources <- DividendsFromUKSourcesCalculation(selfAssessment.unearnedIncomes)
+      (nonSavingsIncomeReceived, totalIncomeReceived, totalTaxableIncome) <- TotalIncomeCalculation(selfEmploymentIncomes, interestFromBanks, dividendsFromUKSources)
       incomeTaxRelief <- IncomeTaxReliefCalculation(selfEmploymentIncomes)
-      personalTaxRelief <- PersonalAllowanceCalculation(totalIncomeReceived , incomeTaxRelief)
-      totalAllowancesAndReliefs <- Future {incomeTaxRelief + personalTaxRelief}
+      personalAllowance <- PersonalAllowanceCalculation(totalIncomeReceived , incomeTaxRelief)
+      totalAllowancesAndReliefs <- Future {incomeTaxRelief + personalAllowance}
       totalIncomeOnWhichTaxIsDue <- TotalIncomeOnWhichTaxIsDueCalculation(totalIncomeReceived, totalAllowancesAndReliefs)
       personalSavingsAllowance <- PersonalSavingsAllowanceCalculation(totalIncomeOnWhichTaxIsDue)
       savingsStartingRate <- SavingsStartingRateCalculation(nonSavingsIncomeReceived, totalAllowancesAndReliefs)
       (nonSavingsTaxAllocated, deductionsRemainingAfterNonSavings) <- NonSavingsIncomeTaxCalculation(nonSavingsIncomeReceived, totalAllowancesAndReliefs)
-      (savingsTaxAllocated, deductionsRemainingAfterSavings) <- SavingsIncomeTaxCalculation(personalSavingsAllowance, savingsStartingRate, deductionsRemainingAfterNonSavings, liability.totalSavingsIncome, nonSavingsTaxAllocated)
-      (dividendsTaxAllocated, deductionsRemainingAfterDividends) <- DividendsTaxCalculation(deductionsRemainingAfterSavings, nonSavingsTaxAllocated, savingsTaxAllocated, liability.dividendsFromUKSources)
+      (savingsTaxAllocated, deductionsRemainingAfterSavings) <- SavingsIncomeTaxCalculation(deductionsRemainingAfterNonSavings, personalSavingsAllowance,
+                                                                                            savingsStartingRate, interestFromBanks.map(_.totalInterest).sum,
+                                                                                            nonSavingsTaxAllocated)
+      (dividendsTaxAllocated, deductionsRemainingAfterDividends) <- DividendsTaxCalculation(deductionsRemainingAfterSavings, nonSavingsTaxAllocated,
+                                                                                            savingsTaxAllocated, dividendsFromUKSources)
       taxDeducted <- TaxDeductedCalculation(selfAssessment.unearnedIncomes)
-    } yield(liability)
+    } yield liability.copy(profitFromSelfEmployments = selfEmploymentIncomes,
+                           interestFromUKBanksAndBuildingSocieties = interestFromBanks,
+                           dividendsFromUKSources = dividendsFromUKSources,
+                           nonSavingsIncomeReceived = Some(nonSavingsIncomeReceived),
+                           totalIncomeReceived = Some(totalIncomeReceived),
+                           totalTaxableIncome = Some(totalTaxableIncome),
+                           allowancesAndReliefs = AllowancesAndReliefs(incomeTaxRelief = Some(incomeTaxRelief),
+                                                                       personalAllowance = Some(personalAllowance),
+                                                                       personalSavingsAllowance = Some(personalSavingsAllowance),
+                                                                       savingsStartingRate = Some(savingsStartingRate)),
+                           totalAllowancesAndReliefs = Some(totalAllowancesAndReliefs),
+                           totalIncomeOnWhichTaxIsDue = Some(totalIncomeOnWhichTaxIsDue),
+                           nonSavingsIncome = nonSavingsTaxAllocated,
+                           savingsIncome = savingsTaxAllocated,
+                           dividendsIncome = dividendsTaxAllocated,
+                           taxDeducted = Option(taxDeducted))
   }
 }
 
 object LiabilityCalculator2 {
-  def apply() = new LiabilityCalculator()
+  def apply() = new LiabilityCalculator2()
 }

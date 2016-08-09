@@ -16,15 +16,11 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
+import scala.concurrent.{ExecutionContext, Future}
 
-import scala.concurrent.Future
+object TotalAllowancesAndReliefsCalculation {
 
-object TotalAllowancesAndReliefsCalculation extends CalculationStep {
-
-  def apply(incomeTaxRelief : BigDecimal , personalAllowance : BigDecimal) = Future[BigDecimal]{
+  def apply(incomeTaxRelief : BigDecimal , personalAllowance : BigDecimal)(implicit ec: ExecutionContext) = Future[BigDecimal]{
     incomeTaxRelief + personalAllowance
   }
-
-  override def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability = ???
 }

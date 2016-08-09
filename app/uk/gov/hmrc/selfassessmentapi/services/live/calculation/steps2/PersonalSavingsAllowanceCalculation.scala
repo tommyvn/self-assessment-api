@@ -18,11 +18,11 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand.{BasicTaxBand, HigherTaxBand, TaxBandRangeCheck}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object PersonalSavingsAllowanceCalculation {
 
-  def apply(totalIncomeOnWhichTaxIsDue: BigDecimal)  = Future[BigDecimal]{
+  def apply(totalIncomeOnWhichTaxIsDue: BigDecimal)(implicit ec: ExecutionContext)  = Future[BigDecimal]{
       if (totalIncomeOnWhichTaxIsDue < 1) 0
       else if (totalIncomeOnWhichTaxIsDue isWithin BasicTaxBand) 1000
       else if (totalIncomeOnWhichTaxIsDue isWithin HigherTaxBand) 500

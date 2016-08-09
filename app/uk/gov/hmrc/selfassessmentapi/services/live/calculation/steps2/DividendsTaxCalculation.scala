@@ -20,14 +20,15 @@ import uk.gov.hmrc.selfassessmentapi.domain.DividendsFromUKSources
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand._
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.{TaxBand, TaxBandAllocation}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 
 object DividendsTaxCalculation extends CalculationStep {
 
   private val dividendAllowance = 5000
 
-  def apply(deductions: BigDecimal, nonSavingsTaxAllocated: Seq[TaxBandAllocation], savingsTaxAllocated: Seq[TaxBandAllocation], dividendsFromUKSources: Seq[DividendsFromUKSources]) = Future[(Seq[TaxBandAllocation], BigDecimal)]{
+  def apply(deductions: BigDecimal, nonSavingsTaxAllocated: Seq[TaxBandAllocation], savingsTaxAllocated: Seq[TaxBandAllocation],
+            dividendsFromUKSources: Seq[DividendsFromUKSources])(implicit ec: ExecutionContext) = Future[(Seq[TaxBandAllocation], BigDecimal)]{
 
     val availabilities = List((available(BasicTaxBand, nonSavingsTaxAllocated, savingsTaxAllocated), BigDecimal(0)),
                               (available(HigherTaxBand, nonSavingsTaxAllocated, savingsTaxAllocated), BigDecimal(0)))

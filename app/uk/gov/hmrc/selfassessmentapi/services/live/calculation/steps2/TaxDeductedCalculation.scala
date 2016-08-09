@@ -19,17 +19,15 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, MongoTaxDeducted, MongoUnearnedIncome}
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object TaxDeductedCalculation extends CalculationStep {
 
-  def apply(unearnedIncomes: Seq[MongoUnearnedIncome] ) = Future[MongoTaxDeducted] {
+  def apply(unearnedIncomes: Seq[MongoUnearnedIncome] )(implicit ec: ExecutionContext) = Future[MongoTaxDeducted] {
     val totalTaxedInterest = unearnedIncomes.map { unearnedIncome =>
       unearnedIncome.savings.filter(_.`type` == InterestFromBanksTaxed).map(_.amount).sum
     }.sum
     val grossedUpInterest = roundDown(totalTaxedInterest * 100 / 80)
     MongoTaxDeducted(roundUp(grossedUpInterest - totalTaxedInterest))
   }
-
-  override def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability = ???
 }

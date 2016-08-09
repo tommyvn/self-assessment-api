@@ -16,7 +16,7 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object PersonalAllowanceCalculation extends Math {
 
@@ -24,7 +24,7 @@ object PersonalAllowanceCalculation extends Math {
 
   private val taperingThreshold = BigDecimal(100000)
 
-  def apply(totalIncomeReceived: BigDecimal, incomeTaxRelief: BigDecimal) = Future[BigDecimal] {
+  def apply(totalIncomeReceived: BigDecimal, incomeTaxRelief: BigDecimal)(implicit ec: ExecutionContext) = Future[BigDecimal] {
     roundDownToNearest(totalIncomeReceived - incomeTaxRelief, 2) match {
       case income if income <= taperingThreshold => standardAllowance
       case income if income > taperingThreshold => positiveOrZero(standardAllowance - ((income - taperingThreshold) / 2))

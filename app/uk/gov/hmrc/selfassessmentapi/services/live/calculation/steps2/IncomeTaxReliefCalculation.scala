@@ -18,10 +18,10 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.SelfEmploymentIncome
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object IncomeTaxReliefCalculation extends Math {
-  def apply(profitFromSelfEmployments: Seq[SelfEmploymentIncome]) = Future[BigDecimal] {
+  def apply(profitFromSelfEmployments: Seq[SelfEmploymentIncome])(implicit ec: ExecutionContext) = Future[BigDecimal] {
     roundUp(profitFromSelfEmployments.map(_.lossBroughtForward).sum)
   }
 }

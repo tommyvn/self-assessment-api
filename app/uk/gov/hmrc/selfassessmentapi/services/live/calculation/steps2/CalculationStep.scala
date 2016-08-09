@@ -36,19 +36,4 @@ case class TaxBandState(taxBand: TaxBand, available: BigDecimal) {
   def allocate(income: BigDecimal): BigDecimal = if (income < available) income else available
 }
 
-trait CalculationResult[T] {
-  self =>
-
-  def result: T
-
-
-  def map[U](f: T => U) : CalculationResult[U] = new CalculationResult[U] {
-    override def result = f(self.result)
-  }
-
-  def flatMap[U](f: T => CalculationResult[U]) : CalculationResult[U] = new CalculationResult[U] {
-    override def result: U = f(self.result).result
-  }
-}
-
 case class SelfAssessment(selfEmployments: Seq[MongoSelfEmployment] = Seq(), unearnedIncomes: Seq[MongoUnearnedIncome] = Seq())

@@ -17,14 +17,14 @@
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
 import uk.gov.hmrc.selfassessmentapi.domain.{DividendsFromUKSources, InterestFromUKBanksAndBuildingSocieties}
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoLiability, SelfEmploymentIncome}
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.SelfEmploymentIncome
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object TotalIncomeCalculation {
   def apply(profitFromSelfEmployments : Seq[SelfEmploymentIncome],
             interestFromUKBanksAndBuildingSocieties: Seq[InterestFromUKBanksAndBuildingSocieties],
-            dividendsFromUKSources: Seq[DividendsFromUKSources]) = Future[(BigDecimal, BigDecimal,BigDecimal)] {
+            dividendsFromUKSources: Seq[DividendsFromUKSources])(implicit ec: ExecutionContext) = Future[(BigDecimal, BigDecimal,BigDecimal)] {
     val (profitsFromSelfEmployment, taxableProfits) = profitFromSelfEmployments.map(income => (income.profit, income.taxableProfit)).unzip
     val nonSavingsIncomeReceived = profitsFromSelfEmployment.sum
     val savingsIncomeReceived = interestFromUKBanksAndBuildingSocieties.map(_.totalInterest).sum

@@ -19,7 +19,7 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.IncomeType
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand._
-import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps.SelfAssessment
+import uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2.SelfAssessment
 import uk.gov.hmrc.selfassessmentapi.{SelfEmploymentSugar, UnitSpec}
 
 class LiabilityCalculatorSpec extends UnitSpec with SelfEmploymentSugar {
@@ -44,7 +44,7 @@ class LiabilityCalculatorSpec extends UnitSpec with SelfEmploymentSugar {
       )
     }
 
-    "calculate tax - only non savings income, which is within basic tax band" in {
+    "calculate tax - only savings income, which is within basic tax band" in {
 
       val liability = liabilityCalculationFor(savingsIncome = 20000)
 
@@ -209,6 +209,6 @@ class LiabilityCalculatorSpec extends UnitSpec with SelfEmploymentSugar {
       )
     )
 
-    LiabilityCalculator().calculate(selfAssessment, MongoLiability.create(generateSaUtr(), taxYear))
+    await(LiabilityCalculator2().calculate(selfAssessment, MongoLiability.create(generateSaUtr(), taxYear)))
   }
 }

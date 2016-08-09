@@ -16,11 +16,11 @@
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object TotalIncomeOnWhichTaxIsDueCalculation extends Math {
 
-  def apply(totalIncomeReceived: BigDecimal, totalAllowancesAndReliefs: BigDecimal) = Future[BigDecimal] {
+  def apply(totalIncomeReceived: BigDecimal, totalAllowancesAndReliefs: BigDecimal)(implicit ec: ExecutionContext) = Future[BigDecimal] {
     positiveOrZero(totalIncomeReceived - totalAllowancesAndReliefs)
   }
 }

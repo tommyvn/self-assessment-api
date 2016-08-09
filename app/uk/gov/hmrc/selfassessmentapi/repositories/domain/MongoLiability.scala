@@ -140,7 +140,10 @@ case class TaxBandAllocation(amount: BigDecimal, taxBand: TaxBand) extends Math 
   }
 }
 
-case class AllowancesAndReliefs(personalAllowance: Option[BigDecimal] = None, personalSavingsAllowance: Option[BigDecimal] = None, incomeTaxRelief: Option[BigDecimal] = None, savingsStartingRate: Option[BigDecimal] = None)
+case class AllowancesAndReliefs(personalAllowance: Option[BigDecimal] = None,
+                                personalSavingsAllowance: Option[BigDecimal] = None,
+                                incomeTaxRelief: Option[BigDecimal] = None,
+                                savingsStartingRate: Option[BigDecimal] = None)
 
 case class MongoTaxDeducted(interestFromUk: BigDecimal)
 

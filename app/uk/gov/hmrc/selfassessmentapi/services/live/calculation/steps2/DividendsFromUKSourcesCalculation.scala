@@ -17,16 +17,15 @@
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
 import uk.gov.hmrc.selfassessmentapi.domain.DividendsFromUKSources
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoUnearnedIncome
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object DividendsFromUKSourcesCalculation extends Math {
 
-  def apply(selfAssessment: SelfAssessment) = Future[Seq[DividendsFromUKSources]] {
-    selfAssessment.unearnedIncomes.map { unearnedIncome =>
-      val totalDividends = unearnedIncome.dividends.map(_.amount).sum
-      DividendsFromUKSources(unearnedIncome.sourceId, roundDown(totalDividends))
+  def apply(unearnedIncomes: Seq[MongoUnearnedIncome])(implicit ec: ExecutionContext) = Future[Seq[DividendsFromUKSources]] {
+    unearnedIncomes.map { unearnedIncome =>
+      DividendsFromUKSources(unearnedIncome.sourceId, roundDown(unearnedIncome.dividends.map(_.amount).sum))
     }
   }
 }

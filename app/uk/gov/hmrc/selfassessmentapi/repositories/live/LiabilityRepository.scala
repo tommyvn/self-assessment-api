@@ -52,6 +52,13 @@ class LiabilityMongoRepository(implicit mongo: () => DB) extends ReactiveReposit
       .map(_ => liability)
   }
 
+  def save(liabilityFuture: Future[MongoLiability]): Future[MongoLiability] = {
+   for { liability <- liabilityFuture
+      selector = BSONDocument("saUtr" -> liability.saUtr.value, "taxYear" -> liability.taxYear.value)
+      updateResult <- collection.update(selector, liability, upsert = true)
+    } yield liability
+  }
+
   def findBy(saUtr: SaUtr, taxYear: TaxYear): Future[Option[MongoLiability]] = {
     find("saUtr" -> saUtr.value, "taxYear" -> taxYear.value)
       .map(_.headOption)

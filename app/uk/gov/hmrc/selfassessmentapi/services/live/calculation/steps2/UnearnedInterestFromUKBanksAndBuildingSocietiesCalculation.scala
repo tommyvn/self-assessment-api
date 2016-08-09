@@ -18,14 +18,14 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 
 import uk.gov.hmrc.selfassessmentapi.domain.InterestFromUKBanksAndBuildingSocieties
 import uk.gov.hmrc.selfassessmentapi.domain.unearnedincome.SavingsIncomeType._
-import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
+import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoUnearnedIncome
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object UnearnedInterestFromUKBanksAndBuildingSocietiesCalculation extends Math {
 
-  def apply(selfAssessment: SelfAssessment) = Future[Seq[InterestFromUKBanksAndBuildingSocieties]]{
-    selfAssessment.unearnedIncomes.map { unearnedIncome =>
+  def apply(unearnedIncomes: Seq[MongoUnearnedIncome])(implicit ec: ExecutionContext) = Future[Seq[InterestFromUKBanksAndBuildingSocieties]]{
+    unearnedIncomes.map { unearnedIncome =>
       val totalInterest = unearnedIncome.savings.map { saving =>
         saving.`type` match {
           case InterestFromBanksTaxed => saving.amount * 100 / 80

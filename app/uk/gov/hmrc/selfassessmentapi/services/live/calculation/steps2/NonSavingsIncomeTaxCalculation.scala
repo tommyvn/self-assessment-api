@@ -19,11 +19,11 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBand._
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.TaxBandAllocation
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 object NonSavingsIncomeTaxCalculation extends CalculationStep {
 
-  def apply(nonSavingsIncomeReceived: BigDecimal, deductions: BigDecimal) = Future[(Seq[TaxBandAllocation],BigDecimal)] {
+  def apply(nonSavingsIncomeReceived: BigDecimal, deductions: BigDecimal)(implicit ec: ExecutionContext) = Future[(Seq[TaxBandAllocation],BigDecimal)] {
 
     val (taxableProfit, deductionsRemaining) = applyDeductions(nonSavingsIncomeReceived, deductions)
 

@@ -19,13 +19,15 @@ package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps2
 import uk.gov.hmrc.selfassessmentapi.domain.selfemployment.ExpenseType.Depreciation
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.{MongoSelfEmployment, SelfEmploymentIncome}
 
+import scala.concurrent.{ExecutionContext, Future}
+
 object SelfEmploymentProfitCalculation extends Math {
 
   private val annualInvestmentAllowance = 200000
 
-  def apply(selfAssessment: SelfAssessment) = CalculationResult[Seq[SelfEmploymentIncome]] {
+  def apply(selfEmployments: Seq[MongoSelfEmployment])(implicit ec: ExecutionContext) = Future[Seq[SelfEmploymentIncome]] {
 
-    selfAssessment.selfEmployments.map { selfEmployment =>
+    selfEmployments.map { selfEmployment =>
       val adjustedProfit = positiveOrZero(profitIncreases(selfEmployment) - profitReductions(selfEmployment))
       val lossBroughtForward = valueOrZero(capAt(selfEmployment.adjustments.flatMap(_.lossBroughtForward), adjustedProfit))
       val outstandingBusinessIncome = valueOrZero(selfEmployment.adjustments.flatMap(_.outstandingBusinessIncome))
