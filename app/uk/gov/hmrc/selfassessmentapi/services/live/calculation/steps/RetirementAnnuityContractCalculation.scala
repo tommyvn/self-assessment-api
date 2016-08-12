@@ -15,21 +15,16 @@
  */
 
 package uk.gov.hmrc.selfassessmentapi.services.live.calculation.steps
-
 import uk.gov.hmrc.selfassessmentapi.repositories.domain.MongoLiability
 
-object TotalAllowancesAndReliefsCalculation extends CalculationStep {
-
+object RetirementAnnuityContractCalculation extends CalculationStep {
   override def run(selfAssessment: SelfAssessment, liability: MongoLiability): MongoLiability = {
+    liability.copy(allowancesAndReliefs =
+      liability.allowancesAndReliefs.copy(
+        retirementAnnuityContract = Some(calculateAnnuityContract(selfAssessment))))
+  }
 
-    val incomeTaxRelief = liability.allowancesAndReliefs.incomeTaxRelief.getOrElse(throw PropertyNotComputedException("incomeTaxRelief"))
-
-    val personalAllowance = liability.allowancesAndReliefs.personalAllowance.getOrElse(throw PropertyNotComputedException("personalAllowance"))
-
-    val retirementAnnuityPayments = liability.allowancesAndReliefs.retirementAnnuityContract.getOrElse(throw PropertyNotComputedException("retirementAnnuity"))
-
-    val totalDeductions = incomeTaxRelief + personalAllowance + retirementAnnuityPayments
-
-    liability.copy(totalAllowancesAndReliefs = Some(totalDeductions), deductionsRemaining = Some(totalDeductions))
+  def calculateAnnuityContract(selfAssessment: SelfAssessment): BigDecimal = {
+    roundUp(selfAssessment.taxYearProperties.flatMap(_.pensionContributions).map(_.retirementAnnuityContract).sum)
   }
 }

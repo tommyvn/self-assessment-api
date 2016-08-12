@@ -47,7 +47,7 @@ object TaxYearProperties extends JsonMarshaller[TaxYearProperties] {
       (__ \ "childBenefit").readNullable[ChildBenefit]
     ) (TaxYearProperties.apply _)
 
-  override def example(id: Option[String]) =
+  override def example(id: Option[String] = None) =
     TaxYearProperties(
       id = id,
       pensionContributions = Some(PensionContribution.example()),
